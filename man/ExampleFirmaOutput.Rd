@@ -3,13 +3,13 @@
 \docType{data}
 \name{ExampleFirmaOutput}
 \alias{ExampleFirmaOutput}
-\title{FIRMA Output}
+\title{Example data set for FIRMA}
 \format{An object of class \code{"data.frame"}.}
 \usage{
 data(ExampleFirmaOutput)
 }
 \description{
-An example data set containing the obtained FIRMA values for two genes.
+An example data set for the FIRMA functions
 }
 \examples{
 data(ExampleFirmaOutput)

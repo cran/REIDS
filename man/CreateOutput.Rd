@@ -4,12 +4,14 @@
 \alias{CreateOutput}
 \title{"CreateOutput"}
 \usage{
-CreateOutput(ID, Name)
+CreateOutput(ID, Name, Location = "")
 }
 \arguments{
-\item{ID}{A list of gene IDs. These are read in via a csv file in the CreateOutput.R file in the documentation folder.}
+\item{ID}{A data frame with a "geneID" column.}
 
 \item{Name}{A name for the returned list.}
+
+\item{Location}{The location where the file should be saved.}
 }
 \value{
 A list with the output of the REIDS_ClusterVersion binded together for all genes.

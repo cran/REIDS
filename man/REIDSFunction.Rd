@@ -4,31 +4,31 @@
 \alias{REIDSFunction}
 \title{"REIDSFunction"}
 \usage{
-REIDSFunction(geneData, nsim = 1000, geneID, exonID,
-  informativeCalls = TRUE, alpha = 0.5)
+REIDSFunction(geneIDs, Name, Indices, DataFile, nsim = 5000,
+  informativeCalls = TRUE, rho = 0.5, Low_AllSamples, Location)
 }
 \arguments{
-\item{geneData}{The data with as rows the probesets and as columns the samples. Note that the first column should contain the gene IDs and the second column the exon IDs}
+\item{geneIDs}{A data frame with a "geneID" column.}
+
+\item{Name}{A name for the returned list.}
+
+\item{Indices}{The .csv file created by Line_Indexer.py which contains indices for every gene.}
+
+\item{DataFile}{The .csv file created by PivotTransformation.}
 
 \item{nsim}{The number of iterations to perform.}
 
-\item{geneID}{A vector of the gene IDs.}
-
-\item{exonID}{A vector of the exon IDs}
-
 \item{informativeCalls}{Logical. Should the I/NI calls method be perform before applying the REIDS model?}
 
-\item{alpha}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than alpha are kept.}
+\item{rho}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.}
+
+\item{Low_AllSamples}{A character vector containing the probe sets which are not DABG in all samples.}
+
+\item{Location}{A character string indication the place where the outputs are saved.}
 }
 \value{
 A list with an element for each gene with per gene the values returned by the iniREIDS and REIDS functions.
 }
 \description{
-The REIDSFunction performs the REIDS model on the output of the DataProcessing function and is a regular R function. It is advised to use this function in its cluster version and not on a regular laptop as it will consume time and memory.
-}
-\examples{
-data(ExampleData)
- 
-Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-informativeCalls=TRUE,alpha=0.5)
+The REIDSFunction performs the REIDS model on the pivot transformed data by calling on the line indexed file. The REIDS model is performed gene by gene and the returned outputs are knitted together.
 }

@@ -4,15 +4,15 @@
 \alias{ExonTesting}
 \title{"ExonTesting"}
 \usage{
-ExonTesting(Data, Exonthreshold = NULL, groups = list(group1 = NULL, group2
-  = NULL), paired = FALSE, significancelevel = NULL)
+ExonTesting(Data, Exonthreshold = NULL, Groups = list(), paired = FALSE,
+  significancelevel = NULL)
 }
 \arguments{
 \item{Data}{The Data on which testing of the array scores should be conducted. This is preferably output of the REIDS function}
 
 \item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
 
-\item{groups}{A list with two elements speficifing the columns of the data of group 1 in group1 and those of group 2 in group2.}
+\item{Groups}{A list with elements specifying the columns of the data in each group.}
 
 \item{paired}{Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.}
 
@@ -22,12 +22,10 @@ ExonTesting(Data, Exonthreshold = NULL, groups = list(group1 = NULL, group2
 A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
 }
 \description{
-The ExonTesting function performs a t-test on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
+The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
 }
 \examples{
-data(ExampleData)
-Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-informativeCalls=TRUE,alpha=0.5)
-ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
+data(TC12000010_REIDS_Output)
+ExonTest=ExonTesting(Data=TC12000010_REIDS_Output,Exonthreshold=NULL,Groups=list(c(1:9),c(10:18)),
 paired=FALSE,significancelevel=NULL)
 }

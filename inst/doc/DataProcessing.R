@@ -5,8 +5,8 @@
 
 library(REIDS)
 
-DataProcessing(chipType="hjay",tags="coreR3,A20071112,EP",Name="HTAData",ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,location="HTAData",verbose=TRUE)
+DataProcessing(chipType="HTA-2.0",tags="*r",Name="HTAData",ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,location="HTAData",verbose=TRUE)
 
 load("HTAData.RData")
 
-PivotTransformData(Data=HTAData,GeneID=HTAData$GeneID,ExonID=HTAData$ExonID,savecsv=FALSE,Name="HTAData_Pivot",location="HTAData")
+PivotTransformData(Data=HTAData,GeneID=HTAData$GeneID,ExonID=HTAData$ExonID,location="HTAData/HTAData_Pivot.csv")

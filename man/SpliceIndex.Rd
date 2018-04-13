@@ -5,7 +5,7 @@
 \title{"SpliceIndex"}
 \usage{
 SpliceIndex(GeneData, ExonData, InformativeExons = NULL,
-  groups = list(group1 = NULL, group2 = NULL), paired = FALSE,
+  Groups = list(group1 = NULL, group2 = NULL), paired = FALSE,
   significancelevel = NULL)
 }
 \arguments{
@@ -15,7 +15,7 @@ SpliceIndex(GeneData, ExonData, InformativeExons = NULL,
 
 \item{InformativeExons}{A character vector of exon IDs. As for the REIDS model probesets are filtered out by I/NI calls model and later on exon score, the remaining exons can be specified here. Only these shall be considered in the FIRMA analysis to make the results between REIDS and FIRMA more comparable}
 
-\item{groups}{The groups of interest in the data. Default two groups are specificied byut more can added as group3, group4,...}
+\item{Groups}{A list with the groups (columns) of interest in the data.}
 
 \item{paired}{Logical. Are the groups paired? only used if two groups are present.}
 
@@ -34,9 +34,9 @@ A t-test is conducted on the splice indices of the two groups to test their diff
 to the function, only these are considered for the analysis. Finally, the p-values are adjusted for multiplicity and if a significance level is specified only the significant p-valuesare kept in the data frame.
 }
 \examples{
-data(ExampleGeneLevel)
-data(ExampleGeneLevel)
-SI_Test=SpliceIndex(GeneData=ExampleGeneLevel,ExonData=ExampleExonLevel,
-InformativeExons=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),paired=FALSE,
-significancelevel=NULL)
+data(TC12000010_ExonLevel)
+data(TC12000010_GeneLevel)
+SI_Test=SpliceIndex(GeneData=TC12000010_GeneLevel,ExonData=TC12000010_ExonLevel
+,InformativeExons=NULL,Groups=list(group1=c(1:9),group2=c(10:18)),
+paired=FALSE,significancelevel=NULL)
 }

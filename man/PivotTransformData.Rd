@@ -4,8 +4,7 @@
 \alias{PivotTransformData}
 \title{"PivotTransformation"}
 \usage{
-PivotTransformData(Data, GeneID = NULL, ExonID = NULL, savecsv = FALSE,
-  Name = NULL, location = NULL)
+PivotTransformData(Data, GeneID = NULL, ExonID = NULL, Location = NULL)
 }
 \arguments{
 \item{Data}{The data frame to be transformed.}
@@ -14,14 +13,10 @@ PivotTransformData(Data, GeneID = NULL, ExonID = NULL, savecsv = FALSE,
 
 \item{ExonID}{A character vector of the the gene IDs that correspond to the rows of the data frame. Necessary if no ExonID column is present in the data frame}
 
-\item{savecsv}{Logical. Should the file be saved as a .csv?}
-
-\item{Name}{The name of the file if it is saved a a .csv file.}
-
-\item{location}{The location where the file should be saved. If NULL, the object is returned to the user.}
+\item{Location}{The location and name where the file should be saved. If NULL, the object is returned to the user. Otherwise, a file with the specified name is created.}
 }
 \value{
-A data.frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster.
+A data frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster.
 }
 \description{
 The PivotTransformation function converts a data frame with multiple rows per gene into a .csv file with one row per gene. This is the first step in data transformation to apply the REIDS function on a HPC Cluster.
@@ -30,8 +25,8 @@ The PivotTransformation function converts a data frame with multiple rows per ge
 All information concerning one gene is gathered. The first column of the returned data frame is the gene ID, the second column contains the exon IDs of all exons of that gene. The third colum indicates the number of probes per exon, the fourth contains the values of thos probes per sample and the last column contains the sample names.This way a .csv file is created for processing on a HPC cluster.
 }
 \examples{
-data(ExampleData)
+data(TC12000010)
 
-PivotTest=PivotTransformData(Data=ExampleData,GeneID=NULL,ExonID=NULL,savecsv=TRUE,
-Name="test",location=NULL)
+PivotTest=PivotTransformData(Data=TC12000010,GeneID=NULL,ExonID=NULL,
+Location=NULL)
 }

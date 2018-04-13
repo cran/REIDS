@@ -1,8 +1,8 @@
 Package: REIDS
 Type: Package
 Title: Random Effects for the Identification of Differential Splicing
-Version: 0.0.1
-Date: 2018-02-02
+Version: 0.0.2
+Date: 2018-04-12
 Author: Marijke Van Moerbeke
 Maintainer: Marijke Van Moerbeke <marijke.vanmoerbeke@uhasselt.be>
 Description: Contains the REIDS
@@ -11,10 +11,11 @@ Description: Contains the REIDS
   assessment of alternative splicing. The vignette introduces the model and shows an example work flow.
 License: GPL-3
 LazyData: true
-Depends: R (>= 2.10), aroma.affymetrix, aroma.core
-Imports: data.table,RColorBrewer,MCMCpack,lmtest
+Depends: R (>= 2.10), aroma.affymetrix, aroma.core, GenomeGraphs,
+        biomaRt
+Imports: data.table,RColorBrewer,MCMCpack,lmtest,methods
 RoxygenNote: 6.0.1
 NeedsCompilation: no
-Packaged: 2018-02-14 17:29:42 UTC; lucp8409
+Packaged: 2018-04-13 13:11:09 UTC; lucp8409
 Repository: CRAN
-Date/Publication: 2018-02-22 11:38:08 UTC
+Date/Publication: 2018-04-13 13:38:26 UTC

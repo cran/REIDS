@@ -24,6 +24,10 @@ d[5]=substr(d[5],start=1,stop=nchar(d[5])-1)
 if(d[1]!="geneID"){
 	
 	geneID=as.character(d[1])
+	geneID=as.character(d[1])
+	if(length(strsplit(geneID,"\n")[[1]])==2){
+		geneID=strsplit(geneID,"[\n\"]")[[1]][3]
+	}
 	exonID=as.character(unlist(strsplit(d[2],",")))
 	lengthexons=as.integer(unlist(strsplit(d[3],",")))
 	
@@ -50,7 +54,6 @@ if(d[1]!="geneID"){
 	geneData=cbind(geneData,TempData)
 	
 	REIDS_Gene=REIDS_ClusterVersion(geneData=geneData,nsim=5000,geneID=geneID,informativeCalls=TRUE,alpha=0.5)
-	assign(paste("REIDS_Gene",geneID,sep="_"),REIDS_Gene)
-	eval(parse(text=paste("save(REIDS_Gene", geneID, ", file=\"/.../REIDS_Gene", geneID, ".RData\")", sep=""))) ## FILL IN  A LOCATION TO SAVE THE DATA
+	save(REIDS_Gene, file=paste("....","/REIDS_Gene_", geneID, ".RData", sep="")) ## FILL IN  A LOCATION TO SAVE THE DATA
 	
 }

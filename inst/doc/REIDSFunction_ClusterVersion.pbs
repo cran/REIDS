@@ -9,7 +9,7 @@ cd (path to directory)
 
 export OMP_NUM_THREADS=1
 
-Rscript REIDS_ClusterVersion.R $"ColonCancer_Pivot.csv" $position $line_length
+Rscript REIDS_ClusterVersion.R $"HTAData_Pivot.csv" $position $line_length
 
 
 

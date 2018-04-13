@@ -43,8 +43,8 @@ other columns contain the sample values. Further the object also contains a vect
 }
 \examples{
 \dontrun{
-DataProcessing(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",
-Name="ColonCancer",ExonSummarization=TRUE,GeneSummarization=TRUE,
-FIRMA=TRUE,location="ColonCancer",verbose=TRUE)
+DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
+ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,
+location="HTAData",verbose=TRUE)
 }
 }

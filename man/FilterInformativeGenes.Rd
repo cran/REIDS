@@ -16,8 +16,6 @@ A subset of the list provided in Data.
 The FilterInformativeGenes function works on the list returned by the REIDS functions. It returns a list that only retains the genes that have informative probesets.
 }
 \examples{
-data(ExampleData)
-Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-informativeCalls=TRUE,alpha=0.5)
-Test_F=FilterInformativeGenes(Test)
+data(TC12000010_REIDS_Output)
+Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
 }

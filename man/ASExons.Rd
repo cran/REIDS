@@ -4,7 +4,7 @@
 \alias{ASExons}
 \title{"ASExons"}
 \usage{
-ASExons(Data, Exonthreshold = 0.5, groups = list(group1 = NULL, group2 =
+ASExons(Data, Exonthreshold = 0.5, Groups = list(group1 = NULL, group2 =
   NULL), paired = FALSE, significancelevel = 0.05)
 }
 \arguments{
@@ -12,7 +12,7 @@ ASExons(Data, Exonthreshold = 0.5, groups = list(group1 = NULL, group2 =
 
 \item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
 
-\item{groups}{A list with two elements speficifing the columns of the data of group 1 in group1 and those of group 2 in group2.}
+\item{Groups}{A list with elements specifying the columns of the data in each group.}
 
 \item{paired}{Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.}
 
@@ -22,14 +22,10 @@ ASExons(Data, Exonthreshold = 0.5, groups = list(group1 = NULL, group2 =
 A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
 }
 \description{
-The ASExons functions can be performed either on the output of the REIDS model or of the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
+The ASExons functions can be performed either on the output of the REIDS model or on the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
 }
 \examples{
-data(ExampleData)
-Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-informativeCalls=TRUE,alpha=0.5)
-ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-paired=FALSE,significancelevel=NULL)
-ASTest=ASExons(Data=ExonTest,Exonthreshold=0.5,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-paired=FALSE,significancelevel=0.20)
+data(TC12000010_REIDS_Output)
+ASTest=ASExons(Data=TC12000010_REIDS_Output,Exonthreshold=0.5,Groups=list(c(1:9),c(10:18)),
+paired=FALSE,significancelevel=0.05)
 }

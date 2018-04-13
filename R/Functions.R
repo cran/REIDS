@@ -5,16 +5,15 @@
 
 #' @import aroma.affymetrix
 #' @import aroma.core
+#' @import GenomeGraphs
+#' @import biomaRt
 #' @importFrom MCMCpack riwish
 #' @importFrom data.table rbindlist 
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom lmtest lrtest
-
-
-
+#' @importFrom methods hasArg
 
 ##### DATA PROCESSING FUNCTIONS #####
-
 
 ## DataProcessing ##
 ## A wrapper function of some of the functions in the aroma.affymetrix package to make sure the data is processed correctly
@@ -43,9 +42,9 @@
 #' other columns contain the sample values. Further the object also contains a vector of the unique gene ID and a vector of the  unique exon IDs. If requested, exon and gene level summarization are performed and saved as data frames at the specified location. Further,the option is provided to perform the FIRMA model on the data as well.
 #' @examples
 #' \dontrun{
-#' DataProcessing(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",
-#' Name="ColonCancer",ExonSummarization=TRUE,GeneSummarization=TRUE,
-#' FIRMA=TRUE,location="ColonCancer",verbose=TRUE)
+#' DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
+#' ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,
+#' location="HTAData",verbose=TRUE)
 #' }
 DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Name="ColonCancer",ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,location=NULL,verbose=TRUE){
 	
@@ -70,7 +69,7 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 	
 	
 	#Backgroundcorrection
-	bc <- RmaBackgroundCorrection(cs,tags="*,coreR3")
+	bc <- RmaBackgroundCorrection(cs,tags=tags)
 	csBC <- process(bc,verbose=verbose)
 	
 	
@@ -79,23 +78,43 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 	csN <- process(qn, verbose=verbose)
 	
 	
-	flattenCellIndices <- function(cells, ...) {
-		# Flatten cell data
-		cells <- unlist(cells);
-		
-		# Do some tricks to clean up the names
-		names(cells) <- gsub("[.](groups|indices)", "", names(cells));
-		
-		# Extract the vector of unit names
-		unitNames <- gsub("[.].*", "", names(cells))
-		
-		# Extract the unit group names
-		groupNames <- gsub(".*[.]", "", names(cells))
-		
-		# Merge data
-		data.frame(unitNames=unitNames, groupNames=groupNames, cell=cells)
-	} 
-	
+	if(chipType=="HTA-2_0"){
+		flattenCellIndices <- function(cells, ...) {
+			# Flatten cell data
+			cells <- unlist(cells);
+			
+			# Do some tricks to clean up the names
+			names(cells) <- gsub("[.](groups|indices)", "", names(cells));
+			
+			# Extract the vector of unit names
+			unitNames <- gsub("[.].*", "", names(cells))
+			
+			# Extract the unit group names
+			temp <- gsub("[T].{12}[.]", "",names(cells))
+			groupNames<-gsub("[.].*", "", temp)
+			
+			# Merge data
+			data.frame(unitNames=unitNames, groupNames=groupNames, cell=cells)
+		} 
+	}
+	else{
+		flattenCellIndices <- function(cells, ...) {
+			# Flatten cell data
+			cells <- unlist(cells);
+			
+			# Do some tricks to clean up the names
+			names(cells) <- gsub("[.](groups|indices)", "", names(cells));
+			
+			# Extract the vector of unit names
+			unitNames <- gsub("[.].*", "", names(cells))
+			
+			# Extract the unit group names
+			groupNames <- gsub(".*[.]", "", names(cells))
+			
+			# Merge data
+			data.frame(unitNames=unitNames, groupNames=groupNames, cell=cells)
+		} 
+	}
 	
 	cells1 <-getCellIndices(cdf, units=1:nbrOfUnits(cdf))
 	cells2 <-flattenCellIndices(cells1)
@@ -108,13 +127,17 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 	
 	GeneID <- as.character(cells2$unitNames)
 	ExonID <- as.character(cells2$groupNames)
-	ProbeID<-as.character(cells2$cell)
+	#ProbeID<-as.character(cells2$cell)
 	
 	UniqueGeneID <- unique(GeneID)
 	UniqueExonID <- unique(ExonID)
 	
-	Data=cbind(GeneID,ExonID,ProbeID,probeintensities)
+	Data=cbind(GeneID,ExonID,probeintensities)
 	Data=as.data.frame(Data)
+	for(i in c(4:ncol(Data))){
+		Data[,i]=round(as.numeric(as.character(Data[,i])),4)
+	}
+	
 	
 	
 	if(!(is.null(location))){
@@ -134,12 +157,13 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 		
 		ExonLevelSummarized_rma=exFit[,-c(3,4,5)]
 		colnames(ExonLevelSummarized_rma)[c(1,2)]=c("GeneID","ExonID")
+		ExonLevelSummarized_rma[,-c(1,2)]=log2(ExonLevelSummarized_rma[,-c(1,2)])
 		
 		if(!(is.null(location))){
 			assign(paste(Name,"ExonLevelSummarized",sep="_"),ExonLevelSummarized_rma,envir=environment())
 			eval(parse(text=paste("save(",Name, "_ExonLevelSummarized, file=\"",location,"/",Name,"", "_ExonLevelSummarized.RData\")", sep=""))) 
 		}
-		message("Warning: Data at exon level is not log2 transformed.")
+		
 		
 
 	}
@@ -154,13 +178,13 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 		
 		GeneLevelSummarized_rma=TrFit[,-c(2,3,4,5)]
 		colnames(GeneLevelSummarized_rma)[1]=c("GeneID")
+		GeneLevelSummarized_rma[,-c(1)]=log2(GeneLevelSummarized_rma[,-c(1)])
 		
 		if(!(is.null(location))){
 			assign(paste(Name,"GeneLevelSummarized",sep="_"),GeneLevelSummarized_rma,envir=environment())
 			eval(parse(text=paste("save(",Name, "_GeneLevelSummarized, file=\"",location,"/",Name,"", "_GeneLevelSummarized.RData\")", sep=""))) 
 		}
 		
-		message("Warning: Data at gene level is not log2 transformed.")
 		
 	}
 	
@@ -202,18 +226,15 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 #' @param Data The data frame to be transformed.
 #' @param GeneID A character vector of the the gene IDs that correspond to the rows of the data frame. Necessary if no GeneID column is present in the data frame
 #' @param ExonID A character vector of the the gene IDs that correspond to the rows of the data frame. Necessary if no ExonID column is present in the data frame
-#' @param savecsv Logical. Should the file be saved as a .csv?
-#' @param Name The name of the file if it is saved a a .csv file.
-#' @param location The location where the file should be saved. If NULL, the object is returned to the user.
-#' @return A data.frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster.
+#' @param Location The location and name where the file should be saved. If NULL, the object is returned to the user. Otherwise, a file with the specified name is created.
+#' @return A data frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster.
 #' @details All information concerning one gene is gathered. The first column of the returned data frame is the gene ID, the second column contains the exon IDs of all exons of that gene. The third colum indicates the number of probes per exon, the fourth contains the values of thos probes per sample and the last column contains the sample names.This way a .csv file is created for processing on a HPC cluster.
 #' @examples
-#' data(ExampleData)
+#' data(TC12000010)
 #' 
-#' PivotTest=PivotTransformData(Data=ExampleData,GeneID=NULL,ExonID=NULL,savecsv=TRUE,
-#' Name="test",location=NULL)
-PivotTransformData<-function(Data, GeneID=NULL,ExonID=NULL,savecsv=FALSE,Name=NULL,location=NULL){
-	Data=as.data.frame(Data[,-c(3)]) #Leaving the probe ID out of the model
+#' PivotTest=PivotTransformData(Data=TC12000010,GeneID=NULL,ExonID=NULL,
+#' Location=NULL)
+PivotTransformData<-function(Data, GeneID=NULL,ExonID=NULL,Location=NULL){
 	Data=as.data.frame(Data)
 	
 	if(is.null(Data$GeneID)&is.null(Data$ExonID)){
@@ -261,19 +282,14 @@ PivotTransformData<-function(Data, GeneID=NULL,ExonID=NULL,savecsv=FALSE,Name=NU
 	DataBind$allsamples=as.character(DataBind$allsamples)
 	DataBind$samplenames=as.character(DataBind$samplenames)
 	
-	if(!(is.null(location))){
-		location2=paste(location,"/",Name,".csv",sep="")		
-		assign(Name,DataBind,envir=environment())
-		utils::write.table(get(Name),file=location2,row.names=FALSE,col.names=TRUE,sep=",",quote=TRUE,qmethod="double")
+	if(!(is.null(Location))){
+		utils::write.table(DataBind,file=Location,row.names=FALSE,col.names=TRUE,sep=",",quote=TRUE,qmethod="double")
 	}
 	else{
 		return(DataBind)
 	}
 	
 }
-
-
-#Pivot=PivotTransformData(Data=ColonCancer, GeneID=ColonCancer$GeneID,ExonID=ColonCancer$ExonID,savecsv=FALSE,Name="ColonCancer_Pivot",location="test")
 
 
 ##### REIDS FUNCTIONS ######
@@ -537,9 +553,15 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 #' @param nsim The number of iterations to perform.
 #' @param geneID A vector of the gene IDs.
 #' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
-#' @param alpha The threshold for filtering in the I/NI calls method. Probesets with scores higher than alpha are kept.
+#' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
 #' @return A .RData file will be saved for each gene with the elements returned by the iniREIDS and REIDS functions.
-REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCalls=TRUE,alpha=0.5){
+REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCalls=TRUE,rho=0.5,Low_AllSamples){
+	
+	DABGs=which(geneData[,2]%in%Low_AllSamples)
+	if(length(DABGs)>0){
+		geneData=geneData[-c(which(geneData[,2]%in%Low_AllSamples)),,drop=FALSE]
+	}
 	Juncs=which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")
 	if(length(Juncs)>0){
 		geneData=geneData[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")),,drop=FALSE]
@@ -549,7 +571,7 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 	output=list()
 	output[[1]]=list()
 	names(output)[1]=geneID
-	lcmmData <- geneData[,-c(1,2,3)]
+	lcmmData <- geneData[,-c(1,2)]
 	lcmmData=as.matrix(lcmmData)
 	enames <- geneData$exonID
 	names(enames)=NULL
@@ -560,7 +582,7 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 	i=1
 	if(informativeCalls){			
 		fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
-		fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>alpha) # iniREIDS returns one value per exon: filtering on exon level, no replicates
+		fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level, no replicates
 		output[[1]][[i]]=fit2
 		names(output[[1]])[i]="Informative"
 		iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
@@ -589,96 +611,163 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 #' 
 #' The CreateOutput functions bind the .RData files returned by the REIDS_ClusterVersion together into one list with an element per gene. The function is advised to be used with the CreateOutput.R and CreateOutput.pbs file in the documentation folder.
 #' @export
-#' @param ID A list of gene IDs. These are read in via a csv file in the CreateOutput.R file in the documentation folder.
+#' @param ID A data frame with a "geneID" column.
 #' @param Name A name for the returned list.
+#' @param Location The location where the file should be saved.
 #' @return A list with the output of the REIDS_ClusterVersion binded together for all genes.
-CreateOutput<-function(ID,Name){
+CreateOutput<-function(ID,Name,Location=""){
 	Output=list()
-	for(i in ID$geneID){
-		Data=get(load(paste("REIDS_Gene_",as.character(i),".RData",sep="")))
+	for(i in as.character(ID$geneID)){
+		Data=get(load(paste(Location,"/REIDS_Gene_",as.character(i),".RData",sep="")))
 		
 		Output[length(Output)+1]=Data
 		names(Output)[length(Output)]=i
 	}
 	
-	assign(paste(Name,"_REIDS_Output",sep="_"),Output,envir=environment())
-	eval(parse(text=paste("save(",Name, "_REIDS_Output, file=\"/folder/",Name, "_REIDS_Output.RData\")", sep=""))) 
+	assign(paste(Name,"_REIDS_Output",sep=""),Output,envir=environment())
+	eval(parse(text=paste("save(",Name, "_REIDS_Output, file=\"",Location,"/",Name, "_REIDS_Output.RData\")", sep=""))) 
 }
 
 
 # REIDS Function - Regular version
 # It is advised to run this model on a HPC cluster and not on a regular laptop as it will consume time and memory
 
+#' "reidsfunction_genebygene"
+#' 
+#' The reidsfunction_genebygene performs the REIDS model and is an internal function of the REIDSFunction. The function calls on the pivot transformed .csv file and transforms the read lines into a data frame on which the REIDS model is performed. 
+#' @export
+#' @param file_name The name of the pivot transformed .csv file.
+#' @param file_pos The position in the file where to start reading.
+#' @param line_length The length of the line to read.
+#' @param nsim The number of iterations to perform.
+#' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
+#' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Location A character string indication the place where the output should be saved.
+#' @return An .RData file for each gene with the values returned by the iniREIDS and REIDS functions.
+reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informativeCalls=TRUE,rho=0.5,Low_AllSamples,Location){
+	conn <- file(file_name, 'rb')
+	current.pos <- seek(conn, where = file_pos, origin = 'start')
+	data <- readBin(conn, 'raw', n = line_length)
+	s <- paste(sapply(data, rawToChar), collapse='')
+	
+	t=strsplit(s,"\",\"")
+	
+	d=unlist(t)
+	
+	d[1]=substr(d[1],start=2,stop=nchar(d[1]))
+	d[5]=substr(d[5],start=1,stop=nchar(d[5])-1)
+	
+	if(d[1]!="GeneID"){
+		
+		geneID=as.character(d[1])
+		if(length(strsplit(geneID,"\n")[[1]])==2){
+			geneID=strsplit(geneID,"[\n\"]")[[1]][3]
+		}
+		exonID=as.character(unlist(strsplit(d[2],",")))
+		lengthexons=as.integer(unlist(strsplit(d[3],",")))
+		
+		npersample=sum(lengthexons)
+		
+		allsamples=d[4]
+		samples=as.numeric(unlist(strsplit(allsamples,",")))
+		samplenames=as.character(unlist(strsplit(d[5],",")))
+		nsamples=length(samplenames)
+		
+		splitsamples<-function(x,samples,npersample){
+			start=1+npersample*(x-1)
+			end=npersample*x
+			values=samples[start:end]
+			return(values)
+		}
+		
+		samplevalues=lapply(c(1:nsamples),function(i) splitsamples(i,samples,npersample) )
+		TempData=rbindlist(list(samplevalues))
+		data.table::setnames(TempData,colnames(TempData),samplenames)
+		
+		geneData=data.frame(geneID=rep(geneID,npersample),exonID=rep(exonID,lengthexons))
+		geneData=data.frame(lapply(geneData, as.character), stringsAsFactors=FALSE)
+		geneData=cbind(geneData,TempData)
+
+	
+		DABGs=which(geneData[,2]%in%Low_AllSamples)
+		if(length(DABGs)>0){
+			geneData=geneData[-c(which(geneData[,2]%in%Low_AllSamples)),,drop=FALSE]
+		}
+		
+		Juncs=which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")
+		if(length(Juncs)>0){
+			geneData=geneData[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")),,drop=FALSE]
+		}
+		
+		exonScore <- arrayScore <- informativeData<- NULL
+		
+		output=list()
+		output[[1]]=list()
+		names(output)[1]=geneID
+		lcmmData <- geneData[,-c(1,2)]
+		lcmmData=as.matrix(lcmmData)
+		enames <- geneData$exonID
+		names(enames)=NULL
+		
+		rownames(lcmmData)<- enames
+			
+			##informative calls
+			i=1
+			if(informativeCalls){			
+				fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
+				fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level,no replicates
+				output[[1]][[i]]=fit2
+				names(output[[1]])[i]="Informative"
+				iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
+				lcmmData <-  iniData   
+				i=i+1
+			}
+			
+			
+			if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>1){  
+				fit <- REIDSmodel_intern(SubgeneData=lcmmData, nsim) 
+				exonScore <-fit$exonScores
+				arrayScore <- fit$arrayScores
+				output[[1]][[i]]=exonScore
+				names(output[[1]])[i]="exonScore"
+				output[[1]][[i+1]]=arrayScore
+				names(output[[1]])[i+1]="arrayScore"
+			}
+			
+		
+		save(output, file=paste(Location,"/REIDS_Gene_", geneID, ".RData", sep=""))
+		rm(output)
+		gc()
+	}	
+	
+	close(conn)
+}
+
+
 #' "REIDSFunction"
 #' 
-#' The REIDSFunction performs the REIDS model on the output of the DataProcessing function and is a regular R function. It is advised to use this function in its cluster version and not on a regular laptop as it will consume time and memory.
+#' The REIDSFunction performs the REIDS model on the pivot transformed data by calling on the line indexed file. The REIDS model is performed gene by gene and the returned outputs are knitted together.
 #' @export
-#' @param geneData The data with as rows the probesets and as columns the samples. Note that the first column should contain the gene IDs and the second column the exon IDs
+#' @param geneIDs A data frame with a "geneID" column.
+#' @param Name A name for the returned list.
+#' @param Indices The .csv file created by Line_Indexer.py which contains indices for every gene.
+#' @param DataFile The .csv file created by PivotTransformation. 
 #' @param nsim The number of iterations to perform.
-#' @param geneID A vector of the gene IDs.
-#' @param exonID A vector of the exon IDs
 #' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
-#' @param alpha The threshold for filtering in the I/NI calls method. Probesets with scores higher than alpha are kept.
+#' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Location A character string indication the place where the outputs are saved.
 #' @return A list with an element for each gene with per gene the values returned by the iniREIDS and REIDS functions.
-#' @examples
-#' data(ExampleData)
-#'  
-#' Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-REIDSFunction <- function(geneData,nsim=1000,geneID,exonID,informativeCalls=TRUE,alpha=0.5){
-	Juncs=which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")
-	if(length(Juncs)>0){
-		geneID=geneID[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC"))]
-		exonID=exonID[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC"))]
-		geneData=geneData[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")),,drop=FALSE]
-	}
+REIDSFunction<-function(geneIDs,Name,Indices,DataFile,nsim=5000,informativeCalls=TRUE,rho=0.5,Low_AllSamples,Location){
+	Lines=utils::read.table(Indices,header=TRUE,sep=",",stringsAsFactors=FALSE)
+	Lines=data.frame(Lines)	
+	Lines[,1]=as.numeric(Lines[,1])
+	Lines[,2]=as.numeric(Lines[,2])
 	
-	exonScore <- arrayScore <- informativeData<- NULL
+	REIDSOut=apply(Lines,2, function(x) reidsfunction_genebygene(file_name=DataFile,file_pos=x[1],line_length=x[2],nsim,informativeCalls,rho,Low_AllSamples,Location))
 	
-	if(is.null(rownames(geneData))|is.null(names(exonID))){
-		message("No rownames were specified for geneData or exonID. The geneID's in the provided order will be taken as the names.")
-		geneData=as.matrix(geneData)
-		rownames(geneData)=geneID
-		names(exonID)=geneID
-	}
-	else if(all(!(unique(rownames(geneData))%in%unique(geneID)))|all(!(unique(names(exonID))%in%unique(geneID)))){ 
-		stop("The rownames of geneData do not match the geneID's. Please put the correctly oredered geneID's as rownames for geneData.")
-	}
-	
-	output=list()
-	for(e in 1:length(unique(geneID))){ 
-		output[[e]]=list()
-		names(output)[e]=unique(geneID)[e]
-		lcmmData <- geneData[which(rownames(geneData)==unique(geneID)[e]),-c(1,2,3)]  
-		enames <- exonID[which(names(exonID)==unique(geneID)[e])]
-		names(enames)=NULL
-		rownames(lcmmData)<- enames
-		
-		##informative calls
-		i=1
-		if(informativeCalls){			
-			fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
-			fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>alpha) # iniREIDS returns one value per exon: filtering on exon level,no replicates
-			output[[e]][[i]]=fit2
-			names(output[[e]])[i]="Informative"
-			iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
-			lcmmData <-  iniData   
-			i=i+1
-		}
-		
-		
-		if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>1){  
-			fit <- REIDSmodel_intern(SubgeneData=lcmmData, nsim) 
-			exonScore <-fit$exonScores
-			arrayScore <- fit$arrayScores
-			output[[e]][[i]]=exonScore
-			names(output[[e]])[i]="exonScore"
-			output[[e]][[i+1]]=arrayScore
-			names(output[[e]])[i+1]="arrayScore"
-		}
-		
-	}
-	return(output)
+	CreateOutput(ID=geneIDs,Name,Location)
 }
 
 ##### OUTPUT ANALYSIS FUNCTIONS #####
@@ -692,10 +781,8 @@ REIDSFunction <- function(geneData,nsim=1000,geneID,exonID,informativeCalls=TRUE
 #' @param Data The output of the REIDS function.
 #' @return A subset of the list provided in Data.
 #' @examples
-#' data(ExampleData)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' Test_F=FilterInformativeGenes(Test)
+#' data(TC12000010_REIDS_Output)
+#' Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
 FilterInformativeGenes <- function(Data){
 	Out1=list()
 	filter <- function(Subset){
@@ -710,14 +797,6 @@ FilterInformativeGenes <- function(Data){
 	return(Out2)
 }
 
-#Testing Search on 1) list of the REIDS Output with and without filtering
-# on the REIDS Output
-#load("TestData/ColonCancer_OutputREIDSModel.RData")
-#test1=FilterInformativeGenes(ColonCancer_OutputREIDSModel)
-#
-#load("TestData/ColonCancer_OutputREIDSModel_NoFilter.RData")
-#test2=FilterInformativeGenes(ColonCancer_OutputREIDSModel_NoFilter)
-
 
 #SEARCH FUNCTION
 
@@ -731,11 +810,9 @@ FilterInformativeGenes <- function(Data){
 #' @param NotFound Not be specified by the user.
 #' @return The returned value is a list with two elements. The first element is SearchResults which contains a list of the found instances in the data. The list contains an element per found instance. If AggregateResults is TRUE, the list is reduced to an element per gene. The secod is a data frame calles NotFound which contain the gene and exon ID which were not found in the data. If only exon ID were specified, the gene ID are NA in this data frame.
 #' @examples
-#' data(ExampleData)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' Test_F=FilterInformativeGenes(Test)
-#' Test_S=Search(WhatToLookFor=data.frame(ExonID=c("PSR010002125")),Data=Test_F,
+#' data(TC12000010_REIDS_Output)
+#' Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
+#' Test_S=Search(WhatToLookFor=data.frame(ExonID=c("PSR12000150")),Data=Test_F,
 #' AggregateResults=FALSE,NotFound=NULL)
 Search <- function(WhatToLookFor=data.frame(GeneID=NULL,ExonID=NULL), Data, AggregateResults=FALSE,NotFound=NULL){
 	if(!(is.null(WhatToLookFor$GeneID))){
@@ -941,104 +1018,121 @@ Search <- function(WhatToLookFor=data.frame(GeneID=NULL,ExonID=NULL), Data, Aggr
 	return(list("SearchResults"=SearchResults,"NotFound"=NotFound))
 }
 
-##Testing Search on 1) list of the REIDS Output and 2) a data frame of processed REIDS Output
-#exonID <- c(3252129,3597384,3333718,3735208,2598321,3338589,2605391,2605390,
-#		2605386,3025632,2375766,3569827,3569830,2334499,3972987,2516011,
-#		2989068,3422189)
-#
-## on the REIDS Output
-#load("TestData/ColonCancer_OutputREIDSModel.RData")
-#test1=Search(WhatToLookFor=data.frame(ExonID=exonID), Data=ColonCancer_OutputREIDSModel, AggregateResults=FALSE,NotFound=NULL)
-#
-#load("TestData/ColonCancer_OutputREIDSModel_NoFilter.RData")
-#test2=Search(WhatToLookFor=data.frame(ExonID=exonID), Data=ColonCancer_OutputREIDSModel_NoFilter, AggregateResults=FALSE,NotFound=NULL)
-#
-#
-## on a data.frame
-#load("TestData/MeanPairedDiff_REIDSOutput.RData")
-#colnames(MeanPairedDiff_REIDSOutput)[1]="GeneID"
-#test3=Search(WhatToLookFor=data.frame(ExonID=exonID), Data=MeanPairedDiff_REIDSOutput, AggregateResults=FALSE,NotFound=NULL)
-
-
-#TESTING FUNCTION
-# input : output of the REIDS model ( a list per gene)
-# procedure : filter on ICC, testing on arrayscores, adjusted p-values, filter on adjuster p-values
-# output : a data frame
 
 #' "ExonTesting"
 #' 
-#' The ExonTesting function performs a t-test on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
+#' The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
 #' @export
 #' @param Data The Data on which testing of the array scores should be conducted. This is preferably output of the REIDS function
 #' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
-#' @param groups A list with two elements speficifing the columns of the data of group 1 in group1 and those of group 2 in group2.
+#' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param paired Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.
 #' @param significancelevel The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.
 #' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
 #' @examples
-#' data(ExampleData)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
+#' data(TC12000010_REIDS_Output)
+#' ExonTest=ExonTesting(Data=TC12000010_REIDS_Output,Exonthreshold=NULL,Groups=list(c(1:9),c(10:18)),
 #' paired=FALSE,significancelevel=NULL)
-ExonTesting <- function(Data, Exonthreshold=NULL,groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=NULL){
+ExonTesting <- function(Data, Exonthreshold=NULL,Groups=list(),paired=FALSE,significancelevel=NULL){
+	
 	if(is.null(Exonthreshold)){
 		Exonthreshold=0
 	}
 	
-	if(is.null(groups$group1)){
+	if(is.null(Groups[[1]])){
 		message("A test on the array scores will NOT be performed")
 	}
 	
 	message("Data is filtered to only contain genes with informative exons")
 	Data_Filtered1=FilterInformativeGenes(Data)  #only those genes with informative exons remain
 	
-	filterASExons<-function(i,geneID,Subset,Exon,groupings,pairing){
-		print(i)
+	
+	filterASExons<-function(i,geneID,Subset,Exon,groups,pairing){
 		
 		## Step 1 : filtering on the Exon value. If 0, no filtering occurs
 		ExonsExon = Subset$exonScore
 		ArrayScores = Subset$arrayScore
 		
-		SelectExonsExon = ExonsExon[which(ExonsExon$X50.>Exon),]
+		SelectExonsExon = ExonsExon[which(ExonsExon$X50>Exon),]
 		ExonsPassedExon = SelectExonsExon$exon
 		
-		SelectRowsArray = which(rownames(ArrayScores)%in%as.character(ExonsPassedExon))
+		SelectRowsArray = which(rownames(ArrayScores)%in%ExonsPassedExon)
 		
 		## Step 2 : Testing of the Array Scores -- paired or not paired
 		if(pairing==FALSE){  # Test between two groups of Array Scores
 			
-			if(!(is.null(groupings$group1)) & length(SelectRowsArray)!=0){
-				ArrayScore_group1=ArrayScores[SelectRowsArray,groupings$group1,drop=FALSE]
-				ArrayScore_group2=ArrayScores[SelectRowsArray,groupings$group2,drop=FALSE]
-				
-				ttest<-function(i,g1,g2,pairs){
-					out1=stats::t.test(x=g1,y=g2)
-					out2=cbind(out1$statistic,out1$p.value)
-					
-					return(out2)
+			names(groups)=c(1:length(groups))
+			
+			ArrayScoreTTest=matrix(0,nrow=length(SelectRowsArray),ncol=3)
+			colnames(ArrayScoreTTest)=c("statistic","p.value","adj.p.value")
+			rownames(ArrayScoreTTest)=rownames(ArrayScores[SelectRowsArray,])
+			
+			ttest<-function(data,groups,pairs){
+				if(length(groups)==2){
+					C=c(data[,groups[[1]]],data[,groups[[2]]])
+					l1=C>0&C<0.5
+					l2=C<0&C>-0.5
+					l=l1+l2
+					if(length(which(l==1))>=(0.80*length(l))){
+						out2=c(0,1)
+					}
+					else{	
+						out1=stats::t.test(x=data[,groups[[1]]],y=data[,groups[[2]]],paired=pairs)
+						out2=cbind(out1$statistic,out1$p.value)
+						return(out2)	
+					}
 				}
+				else{
+					C=c(data[,groups[[1]]])
+					l=C>0&C<0.5
+					if(length(which(l==1))>=(0.80*length(l))){
+						out2=c(0,1)
+					}
+					else{
+						out1=stats::t.test(x=data[,groups[[1]]])
+						out2=cbind(out1$statistic,out1$p.value)
+						return(out2)
+					}
+				}
+			}
+			
+			anovaFtest<-function(data,Groups){
+				fit<-stats::aov(as.vector(data)~Groups)
+				out1=cbind(summary(fit)[[1]][1,4],summary(fit)[[1]][1,5])	
+				return(out1)
 				
-				ArrayScoreTest = t(sapply(c(1:length(ExonsPassedExon)),function(i) ttest(g1=ArrayScore_group1[i,],g2=ArrayScore_group2[i,], pairs = pairing) ))
-				ArrayScoreTest=as.data.frame(ArrayScoreTest)
-				colnames(ArrayScoreTest)=c("t.statistic","p.value")
-				rownames(ArrayScoreTest)=rownames(ArrayScore_group1)
-				
-				
+			}
+			
+			
+			if(length(groups)<=2){
+				ArrayScoreTTest[,c(1,2)] = t(sapply(SelectRowsArray,function(i) {ttest(data=ArrayScores[i,,drop=FALSE],groups=groups, pairs = paired)}))	
 			}
 			else{
-				ArrayScoreTest = NULL
-			}
-		}
-
-		
-		if(pairing==TRUE){ # Test the mean paired difference against zero
-			
-			
-			if(!(is.null(groupings$group1)) & length(SelectRowsArray)!=0){
+				Groups=rep(0,length(unlist(groups)))
+				for(j in 1:length(groups)){
+					positions=groups[[j]]
+					Groups[positions]=names(groups)[j]
+				}
+				Groups=as.numeric(Groups)
+				Groups=factor(Groups)
 				
-				ArrayScore_group1=ArrayScores[SelectRowsArray,groupings$group1,drop=FALSE]
-				ArrayScore_group2=ArrayScores[SelectRowsArray,groupings$group2,drop=FALSE]
+				ArrayScoreTTest[,c(1,2)] = t(sapply(SelectRowsArray,function(i) {anovaFtest(data=ArrayScores[i,,drop=FALSE],Groups=Groups)}))	
+				
+			}
+			p_vals=as.vector(as.matrix((ArrayScoreTTest[,grep("^(p.value)",colnames(ArrayScoreTTest))])))
+			adj_p_vals=matrix(stats::p.adjust(p_vals,"BH"),nrow=nrow(ArrayScoreTTest),ncol=length(grep("^(p.value)",colnames(ArrayScoreTTest))))
+			ArrayScoreTTest[,which(seq(1,ncol(ArrayScoreTTest))%%3==0)]=adj_p_vals
+			
+			ArrayScoreTTest=as.data.frame(ArrayScoreTTest)
+			
+		}
+		else if(pairing==TRUE){ # Test the mean paired difference against zero
+			
+			
+			if(!(is.null(groups[[1]])) & length(SelectRowsArray)!=0){
+				
+				ArrayScore_group1=ArrayScores[SelectRowsArray,groups[[1]],drop=FALSE]
+				ArrayScore_group2=ArrayScores[SelectRowsArray,groups[[2]],drop=FALSE]
 				
 				mean_paired_diff<-function(g1,g2){
 					Paired_Diff=g1-g2
@@ -1054,16 +1148,16 @@ ExonTesting <- function(Data, Exonthreshold=NULL,groups=list(group1=NULL,group2=
 				ArrayScoreTest = t(sapply(c(1:length(ExonsPassedExon)),function(i) mean_paired_diff(g1=ArrayScore_group1[i,],g2=ArrayScore_group2[i,]) ))
 				ArrayScoreTest=data.frame("Mean_Diff"=ArrayScoreTest[,1],"t-statistic"=ArrayScoreTest[,2],p.value=ArrayScoreTest[,3])
 				rownames(ArrayScoreTest)=rownames(ArrayScore_group1)
-			
-			
+				
+				
 			}
 			else{
 				ArrayScoreTest = NULL
 			}
 		}	
 		
-		if(!is.null(ArrayScoreTest)){
-			Output=cbind("geneID"=rep(geneID,length(ExonsPassedExon)), SelectExonsExon,ArrayScoreTest)			
+		if(!is.null(ArrayScoreTTest)){
+			Output=cbind("geneID"=rep(geneID,length(ExonsPassedExon)), SelectExonsExon,ArrayScoreTTest)	
 		}
 		else{
 			Output=cbind("geneID"=rep(geneID,length(ExonsPassedExon)),SelectExonsExon)
@@ -1079,12 +1173,13 @@ ExonTesting <- function(Data, Exonthreshold=NULL,groups=list(group1=NULL,group2=
 		
 	}
 	
-	Out1=lapply(1:length(Data_Filtered1), function(i) filterASExons(i,geneID = names(Data_Filtered1[i]), Subset = Data_Filtered1[[i]], Exon = Exonthreshold , groupings=groups, pairing = paired))
+	Out1=lapply(1:length(Data_Filtered1), function(i) filterASExons(i,geneID = names(Data_Filtered1[i]), Subset = Data_Filtered1[[i]], Exon = Exonthreshold , groups=Groups, pairing = paired))
 	names(Out1)=names(Data_Filtered1)
 	
 	Out2=Out1[vapply(Out1, Negate(is.null), NA)]
 	
 	Out3<-do.call(rbind.data.frame, Out2)
+	
 	
 	
 	## Step 3 : if Exon threshold specified: we adjust for multiplicity ;  filter on significance level 
@@ -1098,50 +1193,38 @@ ExonTesting <- function(Data, Exonthreshold=NULL,groups=list(group1=NULL,group2=
 		}
 		rownames(Out3)=seq(1:nrow(Out3))
 	}
+	
 	return(Out3)
 	
 }
+
 
 ## Identification of the AS exons
 
 #' "ASExons"
 #' 
-#' The ASExons functions can be performed either on the output of the REIDS model or of the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
+#' The ASExons functions can be performed either on the output of the REIDS model or on the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
 #' @export
 #' @param Data The Data on which testing of the array scores should be conducted. This can be either the output of the REIDS model or the ExonTesting function.
 #' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
-#' @param groups A list with two elements speficifing the columns of the data of group 1 in group1 and those of group 2 in group2.
+#' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param paired Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.
 #' @param significancelevel The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.
 #' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
 #' @examples 
-#' data(ExampleData)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' paired=FALSE,significancelevel=NULL)
-#' ASTest=ASExons(Data=ExonTest,Exonthreshold=0.5,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' paired=FALSE,significancelevel=0.20)
-ASExons<-function(Data,Exonthreshold=0.5,groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=0.05){
+#' data(TC12000010_REIDS_Output)
+#' ASTest=ASExons(Data=TC12000010_REIDS_Output,Exonthreshold=0.5,Groups=list(c(1:9),c(10:18)),
+#' paired=FALSE,significancelevel=0.05)
+ASExons<-function(Data,Exonthreshold=0.5,Groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=0.05){
 	
 	if(class(Data)=="list"){
 		message("The data is assumed to be output of the REIDS model. Filtering of the probesets and testing of the array scores will be performed")
 		message("The used threshold for the exon scores is 0.5")
 		message("The used significance level for the p-values is 0.05")
 		
-		TestedData=ExonTesting(Data=Data,Exonthreshold=Exonthreshold,groups=groups,paired=paired,significancelevel=significancelevel)
+		TestedData=ExonTesting(Data=Data,Exonthreshold=Exonthreshold,Groups=Groups,paired=paired,significancelevel=significancelevel)
 		
 		if(nrow(TestedData)!=0){
-#			message(paste("Keep probesets with exon score greater than",Exonthreshold,sep=" "))
-#			Data_Filt1=TestedData[which(TestedData$X50.>Exonthreshold),]
-#		
-#			message("Adjusting p-values for multiplicity")	
-#			Data_Filt1$adj.p.value=p.adjust(Data_Filt1$p.value,"fdr")
-#		
-#			message(paste("Keep probesets with a p-value lower than",significancelevel,sep=" "))
-#			Data_Sign=Data_Filt1[which(Data_Filt1$adj.p.value<0.05),]
-		
-		
 			message("Ordering data in from high tolow exon scores")
 			Data_Sign_Ordered=TestedData[order(-TestedData$X50.),]
 			rownames(Data_Sign_Ordered)=c(1:nrow(Data_Sign_Ordered))
@@ -1166,7 +1249,7 @@ ASExons<-function(Data,Exonthreshold=0.5,groups=list(group1=NULL,group2=NULL),pa
 			Data_Sign=Data_Filt1[which(Data_Filt1$adj.p.value<significancelevel),]
 
 			if(nrow(Data_Sign)!=0){
-				message("Ordering data in from high tolow exon scores")
+				message("Ordering data in from high to low exon scores")
 				Data_Sign_Ordered=Data_Sign[order(-Data_Sign$X50.),]
 				rownames(Data_Sign_Ordered)=c(1:nrow(Data_Sign_Ordered))
 			}
@@ -1183,410 +1266,1189 @@ ASExons<-function(Data,Exonthreshold=0.5,groups=list(group1=NULL,group2=NULL),pa
 	
 }
 
-#testing function ExonTesting and ASExons
-#load("TestData/ColonCancer_OutputREIDSModel.RData")
-#testdata=ColonCancer_OutputREIDSModel[1:500]
-#groupT=c(1,14,16,18,20,3,5,7,9,11)
-#groupN=c(12,15,17,19,2,4,6,8,10,13)
-#groups=list(group1=groupN,group2=groupT)
-#
-#
-#test1=ExonTesting(Data=testdata,Exonthreshold=NULL,groups=groups,paired=TRUE,significancelevel=NULL)
-#
-#test2=ASExons(Data=testdata,Exonthreshold=NULL,groups=groups,paired=TRUE,significancelevel=NULL)
-#
-#test3=ASExons(Data=test2,Exonthreshold=0.5,groups=groups,paired=TRUE,significancelevel=0.05)
-
-
-#' ASREIDSRanking
+#' JunInfo
 #' 
-#' The ASREIDSRanking functions ranks the identified AS exons based on their 5'end and 3'end junction support.
+#' JunInfo functions asses the junction information for a single gene
 #' @export
-#' @param ASProbeSets The AS probe sets as identified by ASExons
-#' @param AnnotData An annotation containing the junctions for each probe set.
-#' @param Data The Data on which testing of the array scores should be conducted.
-#' @param mode A character string which is either "All", "Conservative" or "Liberal" indicating the junction filtering mode.
-#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the supporting junctions, the LRT score, Chi-Squared value and a support category. 
-#' @examples 
-#' data(ExampleData)
-#' data(AnnotationExampleData)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=100,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' paired=FALSE,significancelevel=NULL)
-#' ASTest=ASExons(Data=Test,Exonthreshold=0.5,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' paired=FALSE,significancelevel=0.05)
-#' RankTest=ASREIDSRanking(ASProbeSets=ASTest[,2],AnnotData=AnnotationExampleData,Data=ExampleData,
-#' mode="All")
-ASREIDSRanking<-function(ASProbeSets,AnnotData,Data,mode=c("All","Conservative","Liberal")){
-	mode <- match.arg(mode)
-	Scores<-function(x,ASPSR,Annot,AnnotData,Data){
-		print(x)
-		if(any(Annot$as_type%in%c("3","5"))){
-			if(all(c("3","5")%in%Annot$as_type)){ #both junctions are present
-				if(any(Annot$as_type=="exclusion")){
-					Annot=Annot[-which(Annot$as_type=="exclusion"),]
-				}
-				if(length(which(Annot$as_type%in%c("3","5")))>2){ #more than 1 to both or either sides: take clostest one to each side
-					
-					JUCLeft=NULL
-					JUCRight=NULL
-					if(length(which(Annot$as_type=="3"))==1){
-						JUCRight=Annot[which(Annot$as_type=="3"),1]
-						Annot2=Annot[-which(Annot[,1]==JUCRight),]
-						JUCLeft=NULL
-					}
-					else if(length(which(Annot$as_type=="5"))==1){
-						JUCLeft=Annot[which(Annot$as_type=="5"),1]
-						Annot2=Annot[-which(Annot[,1]==JUCLeft),]
-						JUCRight=NULL
+#' @param x The TC ID for which to retrieve and asses the junction information .
+#' @param ASPSR The AS probe sets as identified by ASExons.
+#' @param JLines The lines which contain information on the TC ID in the junction association file.
+#' @param TrLines The lines which contain information on the TC ID in the transcript annotation file.
+#' @param ELines The lines which contain information on the TC ID in the exon annotation file.
+#' @param DataS The TC ID subset of the probe level data.
+#' @param Groups A list with  elements speficifing the columns of the data in each group.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
+#' @param Plot Should a plot of the gene model be made?
+#' @param Name A character string with the name of the ouput file.
+#' @details The plot is produced by the arcplot function of the arcdiagram package (https://github.com/gastonstat/arcdiagram)
+#' @return The function returns three files. The first file has name "Name.txt" and contains a line per probe set. It shows the reached decision
+#' regarding the probe set (const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second
+#' file is a list of all found transcripts for a particular TC I. The third file indicates whether a specific transcript is present or absent in a group.
+JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),Low_GSamples=c(),Plot,Name){
+	
+	EAnnot=utils::read.table("HTA-2_0_ExonAnnotations.txt",header=FALSE,sep="\t",nrows=as.numeric(ELines[3]),skip=as.numeric(ELines[2]),stringsAsFactors=FALSE)
+	JAnnot=utils::read.table("HTA-2_0_JunAssociations.txt",header=FALSE,sep="\t",nrows=as.numeric(JLines[3]),skip=as.numeric(JLines[2]),stringsAsFactors=FALSE)
+	colnames(JAnnot)=c("TC_ID","PSR_ID","JUC_ID","as_type")		
+	Transcripts=utils::read.table("HTA-2_0_TranscriptAnnotations.txt",header=FALSE,sep="\t",nrows=as.numeric(TrLines[3]),skip=as.numeric(TrLines[2]),stringsAsFactors=FALSE)
+	
+	
+	colnames(DataS)[2]="ExonID"
+	if(any(is.na(JAnnot$PSR_ID))){
+		D=which(is.na(JAnnot$PSR_ID))
+		JAnnot=JAnnot[-c(D),]
+	}
+	
+	
+	OutRange=matrix(0,nrow=length(unique(DataS$ExonID)),ncol=length(Groups))
+	for(i in 1:length(unique(DataS$ExonID))){
+		for(j in 1:length(Groups)){
+			Subset=as.vector(as.matrix(DataS[which(DataS$ExonID==unique(DataS$ExonID)[i]),Groups[[j]]+2]))
+			Range=range(Subset)
+			OutRange[i,j]=Range[2]-Range[1]
+		}	
+	}
+	rownames(OutRange)=unique(DataS$ExonID)
+	
+	PSRsExons=unique(DataS$ExonID)[which(substr(unique(DataS$ExonID),1,3)=="PSR")]
+	Continue=TRUE
+	TempRange=as.vector(as.matrix(OutRange))
+	
+	while(Continue){
+		M=stats::median(TempRange)
+		SD=stats::sd(TempRange)
+		
+		RangeCutOff=M+1.5*SD
+		
+		if(length(which(TempRange>RangeCutOff))==0){
+			Continue=FALSE
+		}	
+		else{
+			TempRange=TempRange[-c(which(TempRange>RangeCutOff))]
+		}	
+		
+		if(RangeCutOff<2){
+			RangeCutOff=2
+		}
+	}
+	
+	GroupData=list()
+	DelJ=c()
+	for(g in 1:length(Groups)){
+		
+		GData=DataS[,c(1,2,Groups[[g]]+2)]
+		
+		for(e in unique(GData$ExonID)){
+			Subset=GData[which(GData$ExonID==e),-c(1,2)]
+			Temp=as.vector(as.matrix(GData[which(GData$ExonID==e),-c(1,2)]))
+			
+			StopDel=c()
+			if(length(Temp)<=12){
+				StopDel=0
+				next
+			}
+			else if(length(Temp)<18){
+				StopDel=2
+			}
+			else{
+				StopDel=3
+			}
+			
+			if(round(OutRange[e,g],2)>RangeCutOff){
+				Continue=TRUE	
+				CutOff=c()
+				Flagged=c()
+				while(Continue){
+					M=mean(Temp)
+					SD=stats::sd(Temp)	
+					Dist=abs(Temp-M)
+					Test=Temp[which.max(Dist)]
+					if(Test>=M){
+						P=stats::pnorm(Test,m=M,sd=SD,lower.tail=FALSE)
 					}
 					else{
-						Annot2=Annot
+						P=stats::pnorm(Test,m=M,sd=SD,lower.tail=TRUE)
 					}
-					
-					OtherAnnot=c()
-					for(j in Annot2[,1]){
-						OtherAnnot=rbind(OtherAnnot,AnnotData[which(AnnotData[,5]==j),c(2,5,8)])
+					if(round(P,2)>=0.05){
+						CutOff=c(CutOff)
+						Continue=FALSE
+					}	
+					else{
+						CutOff=c(CutOff,Temp[which.max(Dist)])
+						Temp=Temp[-c(which.max(Dist))]
+						R=range(Temp)
+						RR=R[2]-R[1]
+						if(round(RR,2)<=RangeCutOff){
+							Continue=FALSE								
+						}		
 					}
-					OtherAnnot=OtherAnnot[-which(OtherAnnot[,1]==as.character(ASPSR)),]
-					if(any(OtherAnnot$as_type=="exclusion")){
-						ExcluTable=table(OtherAnnot[,2])
-						Mult=names(ExcluTable)[which(ExcluTable>1)]
-						for(e in Mult){
-							OtherAnnot=OtherAnnot[-which(OtherAnnot[,2]==e & OtherAnnot$as_type=="exclusion"),]
+				}
+				Temp=Temp[-c(which.max(Dist))]
+				R=range(Temp)
+				RR=R[2]-R[1]
+				if(round(RR,2)>2*RangeCutOff&substr(e,1,3)=="JUC"){
+					DelJ=c(DelJ,e)
+				}
+				
+				if(ncol(Subset)<=6){
+					AtLeast=ncol(Subset)
+				}
+				else{
+					AtLeast=ncol(Subset)-1
+				}
+				
+				if(length(CutOff)>0){
+					F=c()
+					P=c()
+					for(c in CutOff){
+						if(c>=M){
+							P=c(P,stats::pnorm(c,m=M,sd=SD,lower.tail=FALSE))
 						}
-					}
-					if(any(table(OtherAnnot[,1])>1)){
-						Mult=names(table(OtherAnnot[,1]))[which(table(OtherAnnot[,1])>1)]
-						for(e in Mult){
-							while(nrow(OtherAnnot[which(OtherAnnot[,1]==e),])>1){
-								Del=which(OtherAnnot[,1]==e & OtherAnnot$as_type=="exclusion")
-								OtherAnnot=OtherAnnot[-Del[1],]
-							}
-						}
-					}
-
-					ConvertNum=as.integer(substr(OtherAnnot[,1],6,nchar(OtherAnnot[,1])))-as.integer(substr(as.character(ASPSR),6,nchar(as.character(ASPSR))))
-					names(ConvertNum)=OtherAnnot[,1]
-					
-					Left=ConvertNum[which(ConvertNum<0)]
-					ClosestLeft=names(Left)[which.min(abs(Left))]
-					
-					Right=ConvertNum[which(ConvertNum>0)]
-					ClosestRight=names(Right)[which.min(Right)]
-					
-					
-					OtherAnnot=OtherAnnot[order(as.numeric(OtherAnnot$as_type)),]
-					Junctions=OtherAnnot[OtherAnnot[,1]%in%c(ClosestLeft,ClosestRight),2]
-					if(length(Junctions==2)){
-						if(length(unique(Annot[which(Annot[,1]%in%Junctions),2]))==1){
-							Junctions=Junctions[1]
-							if(any(!is.null(c(JUCRight,JUCLeft)))){
-								JUCS=c(JUCRight,JUCLeft)
-								Junctions=c(Junctions,JUCS)
-							}
-						}
-					}
-					if(length(ClosestRight)==0){
-						if(is.null(JUCLeft)& !(is.null(JUCRight))){
-							Junctions=c(Junctions,JUCRight)
-						}
-						else if (!(is.null(JUCLeft)) & is.null(JUCRight)){
-							Junctions=c(Junctions,JUCLeft)
-						}
-					}
-					else if(length(ClosestLeft)==0){
-						if(is.null(JUCLeft) & !(is.null(JUCRight))){					
-							Junctions=c(Junctions,JUCRight)
+						else{
+							P=c(P,stats::pnorm(c,m=M,sd=SD,lower.tail=TRUE))
 						}
 						
-						else if (!(is.null(JUCLeft)) & is.null(JUCRight)){
-							Junctions=c(Junctions,JUCLeft)
-						}
+						F=c(F,rownames(which(Subset==c,arr.ind=TRUE))[1])
 					}
-					#print(Junctions)
-					
-					if(length(Junctions)==0){
-						Juc5=Annot2[which(Annot2$as_type==5),1][1]
-						Juc3=Annot2[which(Annot2$as_type==3),1][1]
-						Junctions=c(Juc5,Juc3)
+					FlagP=c()
+					names(P)=F
+					for(f in unique(F)){
+						FlagP=c(FlagP,mean(P[f]))
 					}
-					else if(length(Junctions)==1){
-						if(Annot[which(Annot[,1]==Junctions),2]==3){
-							Juc5=Annot2[which(Annot2$as_type==5),1][1]
-							Junctions=c(Junctions,Juc5)
-						}
-						else if(Annot[which(Annot[,1]==Junctions),2]==5){
-							Juc3=Annot2[which(Annot2$as_type==3),1][1]
-							Junctions=c(Junctions,Juc3)
-						}
+					names(FlagP)=unique(F)
+					Flagged=names(which(table(F)>=AtLeast))
+					FlagP=FlagP[Flagged]
+				}
+				
+				if(length(Flagged)>0){
+					#print(e)
+					#print(length(Flagged))
+					if(length(Flagged)>length(StopDel)){
+						Flagged=names(sort(FlagP)[1:StopDel])
 					}
-					
-					Del=c()
-					for(j in Junctions){
-						State=AnnotData[which(AnnotData[,5]==j),ncol(AnnotData)][1]
+					GData=GData[-c(which(rownames(GData)%in%Flagged)),]
+				}
+			}
+		}
+		
+		GroupData[[g]]=GData			
+	}
+	
+	
+	print(x)	
+	
+	DelJuncs=names(which(table(DelJ)==length(Groups)))
+	Jucs=unique(JAnnot$JUC_ID)[which(!is.na(unique(JAnnot$JUC_ID)))]
+	
+	
+	DABGPSR=unique(PSRsExons)[which(unique(PSRsExons)%in%Low_AllSamples)]
+	if(length(DABGPSR)>0){
+		PSRsExons=PSRsExons[-c(which(PSRsExons%in%DABGPSR))]
+	}
+	Const=unique(PSRsExons)[which(!unique(PSRsExons)%in%ASPSR)]
+	AS=unique(PSRsExons)[which(unique(PSRsExons)%in%ASPSR)]
+	JAsses=data.frame(matrix(0,nrow=length(Jucs),ncol=(3+length(Groups))))
+	colnames(JAsses)=c("Pattern","Flat","Low",paste("Low-",c(1:length(Groups)),sep=""))
+	Hold=1
+	Connections=data.frame(matrix(0,ncol=(2+length(Groups)),nrow=(nrow(JAsses)*length(Groups))))
+	Place=1
+	#ExonAssesment=data.frame(matrix(0,ncol=2,nrow=length(unique(JAnnot$PSR_ID))))
+	#rownames(ExonAssesment)=unique(JAnnot$PSR_ID)
+	ASJ=c()
+	ExclDef=c()
+	
+	# Assesment of junctions
+	if(length(Jucs)>0){
+		for(k in 1:length(Jucs)){
+			j=Jucs[k]
+			
+			if(is.na(j)){
+				next
+			}
+			
+			JValues=list()
+			JList=list()
+			JLengths=list()
+			JAssesP=c()
+			JAssesV=c()
+			JFlat=c()
+			JLow=c()
+			
+			#valid probes?
+			if(nrow(DataS[which(DataS$ExonID==j),-c(1,2)])<=3){
+				JAssesP=c(JAssesP,"Junction has too few valid probes",rep("-",(2+length(Groups))))
+				JAsses[k,]=JAssesP
+				Hold=Hold+1
+				next				
+			}
+			
+			#Low_AllSamples
+			DABG=TRUE
+			if(j%in%Low_AllSamples){
+				JAssesP=c(JAssesP,"Junction is not DABG",c("-",TRUE,rep("-",length(Groups))))
+				#DABG=FALSE	
+			}
+			
+			if(j%in%DelJuncs){
+				JAssesP=c(JAssesP,"Junction has a too large spread of values",rep("-",(2+length(Groups))))
+				JAsses[k,]=JAssesP
+				Hold=Hold+1
+				next
+			}
+			
+			if(j%in%unique(DataS$ExonID)){
+				JD=list()
+				for(g in 1:length(Groups)){
+					JD[[g]]=as.vector(as.matrix(GroupData[[g]][which(GroupData[[g]]$ExonID==j),-c(1,2)]))
+				}	
+				#JUC_Ranks=sort(JD,index.return=TRUE)$ix
+				JUC_Ranks=rank(unlist(JD),ties.method="random")
+				JList[[length(JList)+1]]=JUC_Ranks
+				names(JList)[length(JList)]=j
+				JLengths=c(JLengths,length(JUC_Ranks))
+				JValues=list(JD)
+				names(JValues)=j
+			}
+			
+			Set=sort(JAnnot[which(JAnnot$JUC_ID==j&(JAnnot$as_type!="exclusion")),2])
+			L=list()
+			D=list()
+			if(!all(Set%in%DataS$ExonID)){
+				Set=Set[-c(which(!Set%in%DataS$ExonID))]
+			}
+			if(length(Set)==2&length(unique(Set))==1){
+				print(j)
+			}
+			if(length(Set)>1){
+				for(s in Set){	
+					PSR=list()
+					for(g in 1:length(Groups)){
+						PSR[[g]]=as.vector(as.matrix(GroupData[[g]][which(GroupData[[g]]$ExonID==s),-c(1,2)]))
 					}
-					if(length(Del)>0){
-						if(length(Del)==length(Junctions)){
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,"No Annot Junction")
-							return(Row)
+					D[[s]]=PSR
+					Ranks=list(rank(unlist(PSR),ties.method="random"))
+					L=c(L,Ranks)
+				}
+				names(L)=Set	
+			}
+			else{
+				JAssesP=c(JAssesP,"Junction does not have 2 anchor points",rep("-",(2+length(Groups))))
+				JAsses[k,]=JAssesP
+				Hold=Hold+1
+				next			
+			}
+			L=c(L,JList)
+			D=c(D,JValues)
+			
+			LL=sapply(unlist(D,recursive=FALSE),length)
+			if(length(unique(LL))>1){
+				MinLength=min(LL)
+				Index=which(LL>MinLength)
+				for(sj in 1:length(Index)){
+					si=Index[sj]
+					t=MinLength/(length(Groups[[1]]))
+					Dnew=c()
+					temp=c()
+					g=as.numeric(substr(names(si),nchar(names(si)),nchar(names(si))))
+					p=substr(names(si),1,nchar(names(si))-1)
+					temp=GroupData[[g]][which(GroupData[[g]]$ExonID==p),-c(1,2)]
+					M=apply(as.matrix(temp),2,stats::median)
+					for(c1 in 1:ncol(temp)){
+						Dist=abs(temp[[c1]]-M[c1])
+						I=rank(Dist)
+						Select=which(I<=t)
+						if(length(Select)<t){
+							Add=t-length(Select)
+							SelectAdd=which((I>t)&(I<=(t+Add)))[Add]
+							Select=c(Select,SelectAdd)
 						}
-						else{
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,"No Annot Junction")
-							return(Row)
-							
+						else if(length(Select)>t){
+							Del=length(Select)-t
+							SelectDel=which(Select>=t)[Del]
+							Select=Select[-c(Del)]
 						}
+						NewC=temp[Select,c1]
+						Dnew=cbind(Dnew,NewC)
 					}
-					
-					
-					#}
+					D[[p]][[g]]=as.vector(as.matrix(Dnew))
+					PSR=unlist(D[[p]])
+					#Ranks=list(sort(PSR,index.return=TRUE)$ix)
+					Ranks=rank(PSR)
+					L[[p]]=Ranks	
 					
 				}
+			}
+			
+			if(length(Set)>1){
+				L[[1]]=(L[[1]]+L[[2]])/2
+				L=L[-c(2)]
+				L[[1]]=sort(L[[1]],index.return=TRUE)$ix
+			}	
+			Ranks=do.call("cbind",L)
+			
+			Y=as.vector(as.matrix(Ranks))
+			exon=c()
+			for(c in 1:ncol(Ranks)){
+				exon=c(exon,rep(c,nrow(Ranks)))
+			}
+			tissuetemp=c()
+			for(g in 1:length(Groups)){
+				tissuetemp=c(tissuetemp,rep(g,nrow(Ranks)/(length(Groups))))
+			}
+			tissue=rep(tissuetemp,ncol(Ranks))
+			
+			exon=as.factor(exon)
+			tissue=as.factor(tissue)
+			ft1<-stats::lm(Y~exon*tissue-1)
+			
+			Inter=summary(ft1)$coefficients[((length(L)+2):nrow(summary(ft1)$coefficients)),4]
+			
+			if(all(round(Inter,2)>=0.05)){
+				# Junction is product of its supporting exons
+				JAssesP=c(JAssesP,"Pattern Supported")						
+			}
+			else{
+#					if(DABG==FALSE){
+#						JAssesP=c(JAssesP,"Junction is not DABG",c("-",TRUE,rep("-",length(Groups))))
+#						JAsses[k,]=JAssesP
+#						Hold=Hold+1
+#						next
+#					}
+				JAssesP=c(JAssesP,"Pattern Not Supported")
+			}
+			
+			#Junction Value Assessment
+			Set=sort(JAnnot[which(JAnnot$JUC_ID==j&(JAnnot$as_type!="exclusion")),2])
+#				
+			#Flat line
+			tissuetemp=c()
+			for(g in 1:length(Groups)){
+				tissuetemp=c(tissuetemp,rep(g,length(D[[1]][[1]])))
+			}
+			Flattest=stats::lm(unlist(D[[length(D)]])~tissuetemp-1)
+			Flat=summary(Flattest)$coefficients[1,4]
+			if(round(Flat,2)>0.05){
+				JFlat=c(JFlat,TRUE)
+			}
+			else{
+				JFlat=c(JFlat,FALSE)
+				
+			}	
+			
+			#Low??
+			Low=rep(FALSE,length(Groups))
+			JLow=FALSE
+			if(j%in%unlist(Low_GSamples)){
+				R=lapply(Low_GSamples,function(x) j%in%x)
+				R=unlist(R)
+				if(all(R)){
+					if(JFlat){
+						Low[which(R)]=TRUE
+					}	
+				}
+				else if(any(R)){
+					Low[which(R)]=TRUE
+				}
+			}					
+			Row=c(JAssesP,JFlat,JLow,Low)
+			JAsses[k,]=Row
+			
+		}
+		JAsses=cbind(Jucs,JAsses)
+		
+		
+		# PSR reflection on junctions
+		
+		for(r in 1:nrow(JAsses)){
+			R=JAsses[r,]
+			J=as.character(JAsses[r,1])
+			PSRs=unique(JAnnot$PSR_ID[which(JAnnot$JUC_ID==J)])
+			supp=sort(JAnnot$PSR_ID[which(JAnnot$PSR_ID%in%PSRs&JAnnot$JUC_ID==J&JAnnot$as_type!="exclusion")])
+			if(!all(supp%in%DataS$ExonID)){
+				supp=supp[-c(which(!supp%in%DataS$ExonID))]
+			}
+			excl=sort(JAnnot$PSR_ID[which(JAnnot$PSR_ID%in%PSRs&JAnnot$JUC_ID==J&JAnnot$as_type=="exclusion")])
+			if(!all(excl%in%DataS$ExonID)){
+				excl=excl[-c(which(!excl%in%DataS$ExonID))]
+			}
+			if(R[2]%in%c("Junction has too few valid probes","Junction has a too large spread of values","Junction does not have 2 anchor points")){
+				next
+			}
+			#Do the support points connect? Check Low, 1-Low and 2-Low
+			for(g in 1:length(Groups)){
+				
+				GData=GroupData[[g]]
+				
+				if(R[2]=="Junction is not DABG"){
+					Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"never")
+					Place=Place+1
+				}
+				
+				else if(as.logical(R[5+g-1])){
+					Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"never")
+					Place=Place+1
+					#junction is low	
+				}	
 				else{
-					Annot=Annot[order(as.numeric(Annot$as_type)),]
-					Junctions=as.character(Annot[,5][which(Annot$as_type%in%c("3","5"))])
-					Del=c()
-					for(j in Junctions){
-						State=AnnotData[which(AnnotData[,5]==j),ncol(AnnotData)][1]
-					}
-					if(length(Del)>0){
-						if(length(Del)==length(Junctions)){
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,"No Annot Junction")
-							return(Row)
+					Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"present")
+					Place=Place+1
+					#junction is present ==> both linking points are present and connection is present
+					#if excl junction: exon is indeed excluded => AS
+					
+					if(length(excl)>0){					
+						for(e in excl){
+							ExclDef=c(ExclDef,e)
+							
+							if(JAsses[r,2]=="Pattern Not Supported"){
+								
+								JAsses[r,2]="Pattern Supported"
+							}		
 						}
-						else{
-							Junctions=Junctions[-which(Junctions%in%Del)]
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,"No Annot Junction")
-							return(Row)
-						}
-					}
-				}
-				
-				Juc3=as.character(Annot[,1][which(Annot$as_type=="3"&Annot[,1]%in%Junctions)])
-				Juc5=as.character(Annot[,1][which(Annot$as_type=="5"&Annot[,1]%in%Junctions)])	
-				
-				PSR=as.vector(as.matrix(Data[which(Data$ExonID==as.character(ASPSR)),-c(1,2,3)]))
-				PSR_Ranks=sort(PSR,index.return=TRUE)$ix
-				JUC3=as.vector(as.matrix(Data[which(Data$ExonID==Juc3),-c(1,2,3)]))
-				JUC3_Ranks=sort(JUC3,index.return=TRUE)$ix
-				JUC5=as.vector(as.matrix(Data[which(Data$ExonID==Juc5),-c(1,2,3)]))
-				JUC5_Ranks=sort(JUC5,index.return=TRUE)$ix
-				
-				if(!Juc3%in%unique(Data$ExonID)){
-					Row=c(as.character(ASPSR),Juc3,Juc5,100000,100000,"Junction 3' not found in Data")
-					return(Row)
-				}
-				
-				if(!Juc5%in%unique(Data$ExonID)){
-					Row=c(as.character(ASPSR),Juc3,Juc5,100000,100000,"Junction 5' not found in Data")
-					return(Row)
-				}
-				
-				L=list(PSR_Ranks,JUC3_Ranks,JUC5_Ranks)
-				if(length(unique(c(length(PSR),length(JUC3),length(JUC5))))>1){
-					MinLength=min(c(length(PSR),length(JUC3),length(JUC5)))
-					Index=which(c(length(PSR),length(JUC3),length(JUC5))>MinLength)
-					for(s in Index){
-						L[[s]]=L[[s]][-which(L[[s]]%in%c((MinLength+1):length(L[[s]])))]
-					}
-				}
-				
-				Ranks=cbind(L[[1]],L[[2]],L[[3]])
-				
-				Y=as.vector(as.matrix(Ranks))
-				exon=c(rep(1,nrow(Ranks)),rep(2,nrow(Ranks)),rep(3,nrow(Ranks)))
-				tissue=rep(c(rep(1,nrow(Ranks)/2),rep(2,nrow(Ranks)/2)),3)
-				
-				exon=as.factor(exon)
-				tissue=as.factor(tissue)
-				ft1<-stats::lm(Y~exon*tissue-1)
-				ft2<-stats::lm(Y~exon+tissue)
-				
-				Chisq=lrtest(ft2,ft1)[2,4]
-				
-				InteractionSign=stats::anova(ft1)[3,5]
-				
-				if(InteractionSign<0.05){
-					if(any(summary(ft1)$coefficients[c(5,6),4]>0.05)){
-						Row=c(as.character(ASPSR),as.character(Juc3),as.character(Juc5),InteractionSign,Chisq,"1 of two junctions is supporting")
-						return(Row)
+					}		
+				}	
+			}	
+		}		
+	}
+	
+	
+	if(any(Connections[,1]==0)){
+		Connections=Connections[-c(which(Connections[,1]==0)),]
+	}
+	if(any(duplicated(Connections))){
+		Connections=Connections[!duplicated(Connections),]
+	}
+	Links=c()		
+	UL=unique(Connections[,c(1,2)])
+	for(c in 1:nrow(UL)){
+		rowLinks=c(cbind(UL[c,1],UL[c,2]))
+		Set=which(Connections[,1]==UL[c,1]&Connections[,2]==UL[c,2])
+		for(g in 1:length(Groups)){
+			GAsses=Connections[Set,g+2]
+			Get=GAsses[which(GAsses!=0)]
+			if(all(Get=="never")){
+				rowLinks=c(rowLinks,"never")
+			}
+			else{
+				rowLinks=c(rowLinks,"present")
+			}
+		}
+		Links=rbind(Links,rowLinks)
+		
+	}	
+	
+	Edges=c()
+	#Exons first
+	Exons=sort(unique(c(unique(JAnnot$PSR_ID),c(unique(PSRsExons),unique(DABGPSR)))))
+	Exons=Exons[which(Exons%in%DataS[,2])]
+	if(length(Exons)==0){
+		return(c("No PSR's present"))
+	}
+	for(i in 1:(length(Exons)-1)){
+		R=c(Exons[i],Exons[i+1])
+		Edges=rbind(Edges,R)
+	}
+	col1=rep("grey",nrow(Edges))
+	width1=rep(2,nrow(Edges))
+	G=list()
+	Cols=list()
+	Widths=list()
+	for(g in 1:(length(Groups)+1)){
+		G[[g]]=Edges
+		Cols[[g]]=col1	
+		Widths[[g]]=width1
+	}
+	#Links
+	if(length(Jucs)>0&length(Links)>0){
+		for(l in 1:nrow(Links)){
+			E=strsplit(Links[l,2],"-")[[1]]
+			if(length(E)>1){
+				for(g in 1:(length(Groups)+1)){
+					G[[g]]=rbind(G[[g]],E)
+					if(g==1){
+						Cols[[1]]=c(Cols[[1]],"blue")
+						Widths[[1]]=c(Widths[[1]],2)
 					}
 					else{
-						Row=c(as.character(ASPSR),as.character(Juc3),as.character(Juc5),InteractionSign,Chisq,"No junction is supporting")
-						return(Row)
-					}
-				}
-				
-				Row=c(as.character(ASPSR),Juc3,Juc5,InteractionSign,Chisq,"")
-			}	
-			else{
-				if(any(Annot$as_type=="exclusion")){
-					Annot=Annot[-which(Annot$as_type=="exclusion"),]
-				}
-				if(length(which(Annot$as_type%in%c("3","5")))>=2){ #more than 1 to both or either sides: take clostest one to each side
-
-					Annot2=Annot
-					
-					OtherAnnot=c()
-					for(j in Annot2[,1]){
-						OtherAnnot=rbind(OtherAnnot,AnnotData[which(AnnotData[,5]==j),c(2,5,8)])
-					}
-					OtherAnnot=OtherAnnot[-which(OtherAnnot[,1]==as.character(ASPSR)),]
-					if(any(OtherAnnot$as_type=="exclusion")){
-						ExcluTable=table(OtherAnnot[,2])
-						Mult=names(ExcluTable)[which(ExcluTable>1)]
-						for(e in Mult){
-							OtherAnnot=OtherAnnot[-which(OtherAnnot[,2]==e & OtherAnnot$as_type=="exclusion"),]
-						}
-					}
-					if(any(table(OtherAnnot[,1])>1)){
-						Mult=names(table(OtherAnnot[,1]))[which(table(OtherAnnot[,1])>1)]
-						for(e in Mult){
-							while(nrow(OtherAnnot[which(OtherAnnot[,1]==e),])>1){
-								Del=which(OtherAnnot[,1]==e & OtherAnnot$as_type=="exclusion")
-								OtherAnnot=OtherAnnot[-Del[1],]
-							}
-						}
-					}
-					
-					ConvertNum=as.integer(substr(as.character(OtherAnnot[,1]),6,nchar(as.character(OtherAnnot[,1]))))-as.integer(substr(as.character(ASPSR),6,nchar(as.character(ASPSR))))
-					names(ConvertNum)=OtherAnnot[,1]
-					
-					Left=ConvertNum[which(ConvertNum<0)]
-					ClosestLeft=names(Left)[which.min(abs(Left))]
-					
-					Right=ConvertNum[which(ConvertNum>0)]
-					ClosestRight=names(Right)[which.min(Right)]
-					
-					
-					OtherAnnot=OtherAnnot[order(as.numeric(OtherAnnot$as_type)),]
-					Junctions=as.character(OtherAnnot[OtherAnnot[,1]%in%c(ClosestLeft,ClosestRight),2])
-					if(length(Junctions)==2){
-						if(length(unique(Annot[which(Annot[,1]%in%Junctions),2]))==1){
-							Junctions=Junctions[1]
-						}
-					}
-			
-					if(length(Junctions)==0){
-						Juc=Annot2[which(Annot2$as_type%in%c(3,5)),1][1]
-						Junctions=c(Juc)
-					}
-					
-					Del=c()
-					for(j in Junctions){
-						State=AnnotData[which(AnnotData[,5]==j),ncol(AnnotData)][1]
-
-					}
-					if(length(Del)>0){
-						if(length(Del)==length(Junctions)){
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,100000,"No Annot Junction")
-							return(Row)
+						L=Links[l,g+1]
+						if(L=="present"){
+							Cols[[g]]=c(Cols[[g]],"blue")
+							Widths[[g]]=c(Widths[[g]],2)
 						}
 						else{
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,100000,"No Annot Junction")
-							return(Row)
-							
+							Cols[[g]]=c(Cols[[g]],"red")
+							Widths[[g]]=c(Widths[[g]],2)
 						}
 					}
-					
-					
-				}
-				else{
-					Annot=Annot[order(as.numeric(Annot$as_type)),]
-					Junctions=Annot[,1][which(Annot$as_type%in%c("3","5"))]
-					Del=c()
-					for(j in Junctions){
-						State=AnnotData[which(AnnotData[,5]==j),ncol(AnnotData)][1]
-
-					}
-					if(length(Del)>0){
-						if(length(Del)==length(Junctions)){
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,100000,"No Annot Junction")
-							return(Row)
-						}
-						else{
-							Junctions=Junctions[-which(Junctions%in%Del)]
-							Row=c(as.character(ASPSR),as.character(Junctions[1]),as.character(Junctions[2]),100000,100000,"No Annot Junction")
-							return(Row)
-						}
-					}
-				}
-				
-				Juc=as.character(Annot[,1][which(Annot$as_type%in%c("3","5")&Annot[,1]%in%Junctions)])
-				
-				PSR=as.vector(as.matrix(Data[which(Data$ExonID==as.character(ASPSR)),-c(1,2,3)]))
-				PSR_Ranks=sort(PSR,index.return=TRUE)$ix
-				JUC=as.vector(as.matrix(Data[which(Data$ExonID==Juc),-c(1,2,3)]))
-				JUC_Ranks=sort(JUC,index.return=TRUE)$ix
-				
-				
-				if(!as.character(Juc)%in%as.character(unique(Data$ExonID))){
-					Row=c(as.character(ASPSR),as.character(Juc),"",100000,100000,"Junction not found in Data")
-					return(Row)
-				}
-				
-				L=list(PSR_Ranks,JUC_Ranks)
-				if(length(unique(c(length(PSR),length(JUC))))>1){
-					MinLength=min(c(length(PSR),length(JUC)))
-					Index=which(c(length(PSR),length(JUC))>MinLength)
-					for(s in Index){
-						L[[s]]=L[[s]][-which(L[[s]]%in%c((MinLength+1):length(L[[s]])))]
-					}
-				}
-				
-				Ranks=cbind(L[[1]],L[[2]])
-				
-				Y=as.vector(as.matrix(Ranks))
-				exon=c(rep(1,nrow(Ranks)),rep(2,nrow(Ranks)))
-				tissue=rep(c(rep(1,nrow(Ranks)/2),rep(2,nrow(Ranks)/2)),2)
-				
-				exon=as.factor(exon)
-				tissue=as.factor(tissue)
-				ft1<-stats::lm(Y~exon*tissue-1)
-				ft2<-stats::lm(Y~exon+tissue)
-				
-				Chisq=lrtest(ft2,ft1)[2,4]
-				
-				InteractionSign=stats::anova(ft1)[3,5]
-				
-				Row=c(as.character(ASPSR),as.character(Juc),"",InteractionSign,Chisq,"Only 1 type of junction")
-				return(Row)
+				}			
 			}
+		}
+		#rownames(Edges)=1:nrow(Edges)
+	}
+	
+	if(length(Groups)==2){
+		FC=c()
+		for(e in Exons){				
+			A=mean(as.vector(as.matrix(GroupData[[1]][which(GroupData[[1]]$ExonID==e),-c(1,2)])))
+			B=mean(as.vector(as.matrix(GroupData[[2]][which(GroupData[[2]]$ExonID==e),-c(1,2)])))
+			FC=c(FC,A-B)
+		}	
+		
+		names(FC)=Exons
+		
+		
+		if(length(Const)==0){
+			MedFC=stats::median(FC)
+			SDFC=0.5
 		}
 		else{
-			
-			if(all(!is.na(Annot$as_type))){
-				if(all(Annot$as_type=="exclusion")){
-					Row=c(as.character(ASPSR),"","",100000,100000,"Only exclusion junctions")
-					return(Row)
-				}
+			ConstFC=FC[Const]
+			MedFC=stats::median(ConstFC)
+			SDFC=stats::sd(ConstFC)
+			if(is.na(SDFC)){
+				SDFC=0.5
 			}
-			else{		
-				Row=c(as.character(ASPSR),"","",100000,100000,"No Annot Junction")
-				return(Row)
+		}
+		ASFC=FC[AS]
+		ASPvals=c()
+		for(a in FC){
+			if(a>MedFC){
+				ASPvals=c(ASPvals,stats::pnorm(a,MedFC,SDFC,lower.tail=FALSE))
+			}
+			else{
+				ASPvals=c(ASPvals,stats::pnorm(a,MedFC,SDFC,lower.tail=TRUE))
+			}	
+		}
+		names(ASPvals)=names(FC)
+		ASPvals=stats::p.adjust(ASPvals,"fdr")
+		ASfctemp=names(which(ASPvals<0.05))
+		ASfc=ASfctemp[which(!ASfctemp%in%c(AS,ASJ))]
+	}
+	else{
+		FC=rep("-",length(Exons))
+		ASfc=NULL
+	}
+	colNodes=rep("grey",length(Exons))
+	names(colNodes)=Exons
+	ColN=list()
+	for(g in 1:(length(Groups)+1)){
+		ColN[[g]]=colNodes			
+	}
+	for(c in Exons){
+		if(c%in%DABG){
+			for(g in c(1:length(Groups)+1)){
+				ColN[[g]][c]="grey"
+			}	
+		}
+		else if(c%in%Const){
+			for(g in c(1:length(Groups)+1)){
+				ColN[[g]][c]="black"
+			}	
+		}
+		else{
+			if(length(Groups)==2){
+				#if(round(ASPvals[c],2)<0.05){
+				if(FC[c]<0){
+					ColN[[2]][c]="red"
+					ColN[[3]][c]="green"
+				}
+				else{
+					ColN[[2]][c]="green"
+					ColN[[3]][c]="red"
+				}
+				#}
+			}
+		}	
+	}
+	
+	
+	DelJ=unique(c(DelJ,as.character(JAsses[,1][which(JAsses[,2]%in%c("Junction has too few valid probes","Junction has a too large spread of values","Junction does not have 2 anchor points"))])))
+	OutList=data.frame("TC_ID"=rep(DataS[1,1],length(Exons)),"PSR_ID"=Exons,"Type"=rep(0,length(Exons)),"Unreliable Junctions"=rep(0,length(Exons)),"Linking Junctions"=rep(0,length(Exons)),"Exclusion Junctions"=rep(0,length(Exons)),"Supported by"=rep(0,length(Exons))
+			,"Identified by"=rep(0,length(Exons)),"Fold Change"=rep(0,length(Exons)),"Exons"=rep(0,length(Exons)))
+	
+	#Reduce transcripts in all samples:
+	NeverPresent=which(apply(Links[,3:ncol(Links),drop=FALSE],1,function(x) all(x==rep("never",length(Groups)))))
+	#NeverLinkedPSR=list()
+	NeverLinkedTr=list()
+	if(length(NeverPresent)>0){
+		RLinks=Links[NeverPresent,,drop=FALSE]		
+		for(r in 1:nrow(RLinks)){
+			set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
+			#set=strsplit(RLinks[r,2],"-")[[1]]		
+			#NeverLinkedPSR[[r]]=set
+			NeverLinkedTr[[r]]=set
+		}
+		NeverLinkedTr=unique(unlist(NeverLinkedTr))
+	}
+	
+	
+	#Event Type
+	TC=DataS[1,1]
+	Strand=Transcripts[1,3]
+	TRS=list()
+	N=c()
+	for(tr in unique(Transcripts[,5])){
+		if(tr%in%NeverLinkedTr){
+			next
+		}
+		Set=Transcripts[which(Transcripts[,5]==tr),2]
+		PSet=Set[which(substr(Set,1,1)=="P")]
+		ESete=Transcripts[which(Transcripts[,5]==tr),4]
+		ESet=ESete[which(substr(Set,1,1)=="P")]
+#			Remove=FALSE
+#			if(length(NeverLinkedPSR)>0){
+#				for(nl in NeverLinkedPSR){
+#					Pos1=which(PSet==nl[1])
+#					Pos2=which(PSet==nl[2])
+#					if(length(Pos1)>0&length(Pos2)>0){
+#						if(Pos1+1==Pos2){
+#							#linked in transcript but the link is not present thus transcript can be removed from the collection
+#							Remove=TRUE
+#						}
+#					}
+#				}
+#			}
+		if(length(DABGPSR)>0){
+			for(d in DABGPSR){
+				if(any(PSet==d)){
+					next
+				}
+			}	
+		}
+		
+		if(Strand=="-"){
+			PSet=rev(sort(PSet))
+			ESet=rev(sort(ESet))
+		}
+		names(ESet)=PSet
+		TRS[[length(TRS)+1]]=ESet	
+		N=c(N,tr)
+	}
+	names(TRS)=N
+	
+	
+	AllExons=unique(unlist(TRS))		
+	for(e in Exons){
+		EAnnotp=EAnnot[which(EAnnot[,2]==e),4]
+		EAnnotp=EAnnotp[which(EAnnotp%in%AllExons)]
+		EAnnotp=paste(EAnnotp,collapse="|")
+		s=JAnnot[which(JAnnot$PSR_ID==e),c(3,4)]
+		Dels=s[which(s[,1]%in%DelJ),1]
+		if(length(Dels)>0){
+			s=s[which(!s[,1]%in%DelJ),]
+		}
+		else{
+			Dels="-"
+		}
+		if(e%in%DABG){
+			r=c("not DABG",rep("-",6),EAnnotp)
+		}
+		
+		else if(e%in%Const){			
+			if(!(all(is.na(s)))){
+				Jss=c()
+				Jsse=c()
+				Js=s[which(s[,2]%in%c(3,5)),1]
+				if(length(Js)>0){
+					Jss=as.character(JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1])
+					if(!(all(Js%in%Jss))){
+						Dels=c(Dels,Js[which(!Js%in%Jss)])
+						if(length(Jss)==0){
+							Jss="-"
+						}
+					}
+				}
+				else{
+					Jss="-"
+				}
+				Jse=s[which(s[,2]=="exclusion"),1]
+				if(length(Jse)>0){
+					Jsse=as.character(JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1])
+				}
+				else{
+					Jsse="-"
+				}
+				SupportedBy=c(Jss,Jsse)
+				if(all(SupportedBy=="-")){
+					SupportedBy="-"
+				}
+				else if(all(SupportedBy%in%s[,1])){
+					SupportedBy="All"
+				}	
+				else if(!any(SupportedBy%in%s[,1])){
+					SupportedBy="None"
+				}
+				else{
+					if(any(SupportedBy=="-")){
+						SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+					}
+				}
+				if(length(Dels)>1&any(Dels=="-")){
+					Dels=Dels[-c(which(Dels=="-"))]
+				}
+				
+				r=c("Const",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"-",FC[e],EAnnotp)
+			}	
+			else{
+				r=c("Const",rep("-",5),FC[e],EAnnotp)
+			}
+		}
+		else if(e%in%AS){
+			
+			if(!(all(is.na(s)))){
+				Jss=c()
+				Jsse=c()
+				Js=s[which(s[,2]%in%c(3,5)),1]
+				if(length(Js)>0){
+					Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+					if(!(all(Js%in%Jss))){
+						Dels=c(Dels,Js[which(!Js%in%Jss)])
+						if(length(Jss)==0){
+							Jss="-"
+						}
+					}
+				}
+				else{
+					Jss="-"
+				}
+				Jse=s[which(s[,2]=="exclusion"),1]
+				if(length(Jse)>0){
+					Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+				}
+				else{
+					Jsse="-"
+				}
+				SupportedBy=c(as.character(Jss),as.character(Jsse))
+				if(all(SupportedBy=="-")){
+					SupportedBy="-"
+				}
+				else if(all(SupportedBy%in%s[,1])){
+					SupportedBy="All"
+				}	
+				else if(!any(SupportedBy%in%s[,1])){
+					SupportedBy="None"
+				}	
+				else{
+					if(any(SupportedBy=="-")){
+						SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+					}
+				}
+				if(length(Dels)>1&any(Dels=="-")){
+					Dels=Dels[-c(which(Dels=="-"))]
+				}
+				r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"REIDS",FC[e],EAnnotp)
+			}	
+			else{
+				r=c("AS",rep("-",4),"REIDS",FC[e],EAnnotp)
+			}
+		}
+		else if(e%in%ASJ){
+			if(!(all(is.na(s)))){
+				Jss=c()
+				Jsse=c()
+				Js=s[which(s[,2]%in%c(3,5)),1]
+				if(length(Js)>0){
+					Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+					if(!(all(Js%in%Jss))){
+						Dels=c(Dels,Js[which(!Js%in%Jss)])
+						if(length(Jss)==0){
+							Jss="-"
+						}
+					}
+				}
+				else{
+					Jss="-"
+				}
+				Jse=s[which(s[,2]=="exclusion"),1]
+				if(length(Jse)>0){
+					Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+				}
+				else{
+					Jsse="-"
+				}
+				SupportedBy=c(as.character(Jss),as.character(Jsse))
+				if(all(SupportedBy=="-")){
+					SupportedBy="-"
+				}
+				else if(all(SupportedBy%in%s[,1])){
+					SupportedBy="All"
+				}	
+				else if(!any(SupportedBy%in%s[,1])){
+					SupportedBy="None"
+				}
+				else{
+					if(any(SupportedBy=="-")){
+						SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+					}
+				}
+				if(length(Dels)>1&any(Dels=="-")){
+					Dels=Dels[-c(which(Dels=="-"))]
+				}
+				r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"Junction Support",FC[e],EAnnotp)
+			}
+			else{
+				r=c("AS",rep("-",4),"Junction Support",FC[e],EAnnotp)
+			}	
+		}
+		else if(e%in%ASfc){
+			
+			if(!(all(is.na(s)))){
+				Jss=c()
+				Jsse=c()
+				Js=s[which(s[,2]%in%c(3,5)),1]
+				if(length(Js)>0){
+					Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+					if(!(all(Js%in%Jss))){
+						Dels=c(Dels,Js[which(!Js%in%Jss)])
+						if(length(Jss)==0){
+							Jss="-"
+						}
+					}
+				}
+				else{
+					Jss="-"
+				}
+				Jse=s[which(s[,2]=="exclusion"),1]
+				if(length(Jse)>0){
+					Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+				}else{
+					Jsse="-"
+				}
+				SupportedBy=c(as.character(Jss),as.character(Jsse))
+				if(all(SupportedBy=="-")){
+					SupportedBy="-"
+				}
+				else if(all(SupportedBy%in%s[,1])){
+					SupportedBy="All"
+				}	
+				else if(!any(SupportedBy%in%s[,1])){
+					SupportedBy="None"
+				}	
+				else{
+					if(any(SupportedBy=="-")){
+						SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+					}
+				}
+				if(length(Dels)>1&any(Dels=="-")){
+					Dels=Dels[-c(which(Dels=="-"))]
+				}
+				r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"Fold Change",FC[e],EAnnotp)
+			}	
+			else{
+				r=c("AS",rep("-",4),"Fold Change",FC[e],EAnnotp)
 			}
 			
 		}
-		return(Row)
+		else{
+#				if(e%in%DataS[,2]&(!e%in%JAnnot[,2])){
+#					r=c("INI Filtered",rep("-",6))
+#				}
+			#else{
+			print(e)
+			#}
+		}
+		OutList[OutList[,2]==e,c(3:10)]=r
 	}
 	
-	ScoresOutput=t(sapply(1:length(ASProbeSets), function(x) Scores(x,ASPSR=ASProbeSets[x],Annot=AnnotData[which(as.character(AnnotData[,2])==as.character(ASProbeSets[x])),c(5,8)],AnnotData,Data)))
+	OutList[,9]=as.numeric(OutList[,9])
 	
-	if(mode=="Conservative"){
-		Out=ScoresOutput[which(ScoresOutput[,6]==""&round(ScoresOutput[,4],2)>=0.05),]
-		return(Out)
+	
+	Table1=matrix(0,nrow=length(TRS)*2,ncol=3)
+	for(i in 1:length(TRS)){
+		N=names(TRS)[i]
+		R1=paste(names(TRS[[i]]),collapse="|")
+		R2=paste(TRS[[i]],collapse="|")
+		Table1[i*2-1,]=c(TC,N,R1)
+		Table1[i*2,]=c(TC,N,R2)
 	}
-	else if(mode=="Flexible"){
-		Out1=ScoresOutput[which(ScoresOutput[,6]==""&round(ScoresOutput[,4],2)>=0.05),]
-		Out2=ScoresOutput[which(ScoresOutput[,6]=="1 of two junctions is supporting"&round(ScoresOutput[,4],2)<0.05),]
-		Out3=ScoresOutput[which(ScoresOutput[,6]=="Only 1 type of junction"&ScoresOutput[,4]>0.05),]
-		Out=rbind(Out1,Out2,Out3)
-		return(Out)
+	utils::write.table(Table1, "Transcripts.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	#Transcripts per Groups
+	
+	GroupTranscripts=list()
+	for(g in 1:length(Groups)){
+		N=c()
+		GroupTranscripts[[g]]=list()
+		NeverPresent=which(sapply(Links[,g+2],function(x) all(x=="never")))
+		RLinks=Links[NeverPresent,,drop=FALSE]
+		#NeverLinkedPSR=list()
+		NeverLinkedTr=list()
+		if(nrow(RLinks)>0){
+			for(r in 1:nrow(RLinks)){
+				set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
+				NeverLinkedTr[[r]]=set
+				#set=strsplit(RLinks[r,1],"-")[[1]]
+				#NeverLinkedPSR[[r]]=set
+			}
+			NeverLinkedTr=unique(unlist(NeverLinkedTr))
+		}	
+		for(tr in unique(Transcripts[,5])){
+			if(tr%in%NeverLinkedTr){
+				next
+			}
+			Set=Transcripts[which(Transcripts[,5]==tr),2]
+			PSet=Set[which(substr(Set,1,1)=="P")]
+			ESete=Transcripts[which(Transcripts[,5]==tr),4]
+			ESet=ESete[which(substr(Set,1,1)=="P")]
+			
+			
+			if(length(Low_GSamples[[g]])>0){
+				if(any(PSet%in%Low_GSamples[[g]])){
+					next
+				}
+			}
+			
+			if(Strand=="-"){
+				PSet=rev(sort(PSet))
+				ESet=rev(sort(ESet))
+			}
+			
+			GroupTranscripts[[g]][[length(GroupTranscripts[[g]])+1]]=ESet	
+			N=c(N,tr)
+		}
+		names(GroupTranscripts[[g]])=N
+		
 	}
-	else{
-		return(ScoresOutput)
-	}	
+	
+	Table2=matrix(0,nrow=length(TRS),ncol=(2+length(Groups)))
+	for(i in 1:length(TRS)){
+		N=names(TRS)[i]
+		Present=rep("no",length(Groups))
+		for(g in 1:length(Groups)){
+			if(N%in%names(GroupTranscripts[[g]])){
+				Present[g]="Yes"
+			}
+		}
+		Table2[i,]=c(TC,N,Present)
+	}
+	utils::write.table(Table2, "Transcripts_Groups.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	
+	
+	if(Strand=="-"){
+		OutList=OutList[nrow(OutList):1,]
+	}
+	
+	Decision=OutList[,3]
+	names(Decision)=OutList[,2]
+	C=names(Decision)[which(Decision=="Const")]
+	
+	
+	Category=rep("",nrow(OutList))
+	
+	for(r in 1:nrow(OutList)){
+		if(Decision[r]=="Const"){
+			Category[r]="-"
+			next
+		}
+		else if(Decision[r]=="not DABG"){
+			Category[r]="-"
+			next
+		}
+		PSR=as.character(OutList[r,2])
+		EAnnotp=EAnnot[which(EAnnot[,2]==PSR),]
+		if(nrow(EAnnotp)==0){
+			Category[r]="Intron Retention"	
+			next
+		}	
+		else{
+			Temp=c()
+			for(ea in 1:nrow(EAnnotp)){
+				OtherPSR=as.character(EAnnot[which(EAnnot[,4]==as.character(EAnnotp[ea,4])),2])
+				OtherPSR=OtherPSR[which(OtherPSR!=PSR)]
+				if(length(OtherPSR)>0){					
+					S=substr(OtherPSR,1,3)
+					Temp=c(Temp,OtherPSR[which(S=="PSR")])
+				}
+				else{
+					Temp=c(Temp,"")
+				}
+				
+			}
+			if(any(Temp!="")){
+				#exon has more than 1 probe set annotated to itself
+				Temp=unique(Temp)
+				if(any(Temp=="")){
+					Temp=Temp[-c(which(Temp==""))]
+				}
+				if(all(which(OutList[,2]%in%Temp)>r)&r==1){
+					Category[r]="Alternative First'"
+					next
+				}
+				else if(all(which(OutList[,2]%in%Temp)>r)){
+					Category[r]="Alternative 5'"
+					for(tra in 1:length(TRS)){
+						if(names(TRS[[tra]])[1]==PSR){
+							Category[r]="Alternative First"
+							break
+						}
+					}
+					next
+				}
+				else if(all(which(OutList[,2]%in%Temp)<r)&r==nrow(OutList)){
+					Category[r]="Alternative Last"
+					next
+				}
+				else if(all(which(OutList[,2]%in%Temp)<r)){
+					Category[r]="Alternative 3'"
+					for(tra in c(1:length(TRS))){
+						if(names(TRS[[tra]])[length(TRS[[tra]])]==PSR){
+							Category[r]="Alternative Last"
+							break
+						}
+					}
+					next
+				}
+				else{
+					Category[r]="Complex Event"
+					next
+				}
+				
+			}
+			else{
+				NeighboursIn=c()
+				NeighboursOut=c()
+				Positions=c()
+				for(tra in 1:length(TRS)){
+					if(names(TRS[[tra]])[1]==PSR){
+						Category[r]="Alternative First"
+						break
+					}
+					else if(names(TRS[[tra]])[length(TRS[[tra]])]==PSR){
+						Category[r]="Alternative Last"
+						break
+					}
+					else{
+						Pos=which(names(TRS[[tra]])==PSR)
+						if(length(Pos)>0){
+							Left=names(TRS[[tra]])[Pos-1]
+							Right=names(TRS[[tra]])[Pos+1]
+							NeighboursIn=c(NeighboursIn,Left,Right)	
+						}
+						else if(names(TRS[[tra]])[1]%in%OutList[,2]&names(TRS[[tra]])[length(TRS[[tra]])]%in%OutList[,2]){
+							if(which(OutList[,2]==names(TRS[[tra]])[1])<r&which(OutList[,2]==names(TRS[[tra]])[length(TRS[[tra]])])>r){				
+								F=c(names(TRS[[tra]]),PSR)
+								F=sort(F)
+								Pos=which(F==PSR)
+								Left=F[Pos-1]
+								Right=F[Pos+1]
+								NeighboursOut=c(NeighboursOut,Left,Right)	
+							}
+						}
+						
+					}
+					
+				}
+				
+				if(Category[r]==""){
+					if(length(NeighboursIn)>0&length(NeighboursOut)>0){
+						NIN=sort(unique(NeighboursIn))
+						NOUT=sort(unique(NeighboursOut))
+						
+						if(length(NIN)==2&length(NOUT)==2){
+							if(all(NIN%in%NOUT)){
+								if(Decision[OutList[which(OutList[,2]==NIN[1]),2]]=="Const"&Decision[OutList[which(OutList[,2]==NIN[2]),2]]=="Const"){
+									Category[r]="Cassette Exon"
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+							}
+							
+							else if(NIN[1]==NOUT[1]&NOUT[2]==OutList[r+1,2]&NIN[2]!=OutList[r+1,2]){
+								if(r<(length(Decision)-2)){
+									if(Decision[OutList[r+2,2]]=="Const"){
+										Category[r]="Mutually Exclusive Exon"
+									}
+									else{
+										Category[r]="Complex Event"
+									}
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+							}
+							
+							else if(NIN[2]==NOUT[2]&NOUT[1]==OutList[r-1,2]&NIN[1]!=OutList[r-1,2]){
+								if(r>2){
+									if(Decision[OutList[r-2,2]]=="Const"){
+										Category[r]="Mutually Exclusive Exon"
+									}	
+									else{
+										Category[r]="Complex Event"
+									}
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+								
+								
+							}
+							else{
+								Category[r]="Complex Event"
+							}
+						}
+						else{
+							Category[r]="Complex Event"
+						}
+					}
+					else if(length(NeighboursIn)>0){
+						NIN=sort(unique(NeighboursIn))
+						if(length(NIN)==2){
+							if(NIN[1]%in%OutList[,2]&NIN[2]%in%OutList[,2]){
+								if(Decision[OutList[which(OutList[,2]==NIN[1]),2]]=="Const"&Decision[OutList[which(OutList[,2]==NIN[2]),2]]=="Const"){
+									Category[r]="Cassette Exon"
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+							}
+							else{
+								Category[r]="Complex Event"
+							}
+						}
+						else{
+							Category[r]="Complex Event"
+						}
+					}	
+					else{
+						Category[r]="Complex Event"
+					}
+				}
+				else{
+					next
+				}
+			}
+		}
+	}
+	
+	if(Plot){		
+		#pdf("Figures/Tr_TC17001298.pdf",width=18,height=10)
+		graphics::par(mfrow=c(2,1))
+		graphics::par(mar=c(12,1,1,1))
+		for(g in 2:3){
+			if(Strand=="-"){
+				R=G[[g]][which(rownames(G[[g]])=="R"),]
+				R=R[nrow(R):1,c(2,1)]
+				E=G[[g]][which(rownames(G[[g]])=="E"),]
+				E=E[nrow(E):1,c(2,1)]
+				G1=rbind(R,E)
+				
+				C1=rev(Cols[[g]][which(rownames(G[[g]])=="R")])
+				C2=rev(Cols[[g]][which(rownames(G[[g]])=="E")])
+				C=c(C1,C2)
+				
+				arcplot(G1,lwd.arcs=rev(Widths[[g]])+1,above=NULL,col.arcs=C,ljoin = 2,lend=2,pch.nodes=15,cex.nodes=2,cex.labels=1.2,col.nodes=rev(ColN[[g]]))
+			}
+			else{
+				arcplot(G[[g]],lwd.arcs=Widths[[g]],above=NULL,col.arcs=Cols[[g]],ljoin = 2,lend=2,pch.nodes=15,cex.nodes=2,cex.labels=1.5,col.nodes=ColN[[g]])
+			}
+		}
+		#dev.off()
+	}
+	#warnings()
+	OutList=cbind(OutList,Category)
+	utils::write.table(OutList, paste(Name,".txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	rm(OutList)
+	gc() 
+	#return(list("Output"=OutList,"Transcripts"=GroupTranscripts,"PlotInfo"=list(G,Widths,Cols)))
 }
 
 
@@ -1594,85 +2456,23 @@ ASREIDSRanking<-function(ASProbeSets,AnnotData,Data,mode=c("All","Conservative",
 #' 
 #' The REIDS_JunctionAssessment functions assess identified AS exons based on their 5'end and 3'end and exclusion junction support.
 #' @export
-#' @param DABGFile A character vector with the name of The Detection Above Background file with p-values.
-#' @param probeset_probesfile A character vector which aides the conversion of ID's between the DABG tool and the used data IDs.
-#' @param ASProbeSets The AS probe sets as identified by ASExons
-#' @param AnnotData An annotation containing the junctions for each probe set.
-#' @param Data The Data on which testing of the array scores should be conducted.
-#' @param mode A character string which is either "All", "Conservative" or "Liberal" indicating the junction filtering mode.
-#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the supporting junctions, the LRT score, Chi-Squared value, a support category, the exclusion junctions and a logical value indicating whether the exclusion junction supports the AS candidacy 
-#' @examples 
-#' data(ExampleData)
-#' data(AnnotationExampleData)
-#' data(Example_DAGC)
-#' data(Example_probeset_probesfile)
-#' Test=REIDSFunction(geneData=ExampleData,nsim=100,geneID=ExampleData[,1],exonID=ExampleData[,2],
-#' informativeCalls=TRUE,alpha=0.5)
-#' ExonTest=ExonTesting(Data=Test,Exonthreshold=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' paired=FALSE,significancelevel=NULL)
-#' ASTest=ASExons(Data=Test,Exonthreshold=0.5,groups=list(group1=c(1,2,3),group2=c(4,5,6)),paired=FALSE
-#' ,significancelevel=0.05)
-#' 
-#' J_ASTest=REIDS_JunctionAssessment(DABGFile=Example_DAGC,probeset_probesfile=
-#' Example_probeset_probesfile,ASProbeSets=ASTest[,2],AnnotData=AnnotationExampleData,
-#' Data=ExampleData,mode="All")
-
-REIDS_JunctionAssessment<-function(DABGFile,probeset_probesfile,ASProbeSets,AnnotData,Data,mode=c("All","Conservative","Liberal")){
+#' @param ASProbeSets The AS probe sets as identified by ASExons.
+#' @param JAnnotI A table with the line indexing for the juncion associations.
+#' @param EAnnotI A table with the line indexing for the exon annotations.
+#' @param TrAnnotI A table with the line indexing for the transcript annotations.
+#' @param Data The probe level data.
+#' @param Groups A list with  elements speficifing the columns of the data in each group.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
+#' @param Name A character string with the name of the ouput file.
+#' @return The function returns three files. The first file has name "Name.txt" and contains a line per probe set. It shows the reached decision
+#' regarding the probe set (const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second
+#' file is a list of all found transcripts for a particular TC ID. The third file indicates whether a specific transcript is present or absent in a group.
+REIDS_JunctionAssesment<-function(ASProbeSets=c(),JAnnotI,EAnnotI,TrAnnotI,Data,Groups=list(c(3,4,5),c(6,7,8)),Low_AllSamples=c(),Low_GSamples=c(),Name){
 	
-	#info of 5' end and 3' end linking junctions
-	LinkingJSupport=ASREIDSRanking(ASProbeSets, AnnotData,Data,mode)
-	
-	#info of the exclusion junction
-	if(class(DABGFile)=="character"){
-		DAGC<-utils::read.table(DABGFile,sep="\t",header=TRUE)
-	}
-	else{
-		DAGC=DABGFile
-	}
-	if(class(probeset_probesfile)=="character"){
-		Probesets_Probes<-utils::read.table(probeset_probesfile,header=TRUE,sep="\t")
-	}
-	else{
-		Probesets_Probes=probeset_probesfile
-	}
-	Low=apply(DAGC,1,function(x) all(x[-c(1)]>=0.05))
-	LowUIDs=DAGC[,1][Low]
-	LOWUID_Probes=Probesets_Probes[which(Probesets_Probes[,1]%in%LowUIDs),]
-	LOW_Probesets=unique(Data[which(Data[,3]%in%LOWUID_Probes[,2]),2])
-	LOW_JUC_ALLSamples=LOW_Probesets[which(substr(LOW_Probesets,1,3)=="JUC")]
-	
-	#==>Low?
-	
-	Exclinfo<-function(p,AnnotData,LOW_JUC_ALLSamples){
-		
-		if(!p[6]%in%c("INI Filtered Junctions","Junction 3' not found in Data")){		
-			J=AnnotData[which(AnnotData[,2]==as.character(p[1])),c(5,8),drop=FALSE]
-			E_J=J[which(J[,2]=="exclusion"),]
-			if(nrow(E_J)>0){
-				if(all(as.character(E_J[,1])%in%LOW_JUC_ALLSamples)){
-					AS=FALSE
-				}	
-				else{
-					AS=TRUE
-				}
-			}
-			else{
-				AS=TRUE
-			}
-			return(c(paste(as.character(E_J[,1]),collapse="|"),AS))
-		}
-		else{
-			return("-",FALSE)
-		}
-	}
-	
-	
-	DecisionExcl=t(apply(LinkingJSupport,1,function(x) Exclinfo(p=x,AnnotData=AnnotData,LOW_JUC_ALLSamples=LOW_JUC_ALLSamples)))
-	
-	Out=cbind(LinkingJSupport,DecisionExcl)
-	
-	return(Out)
-
+	Genes=unique(Data$GeneID)
+	writeLines(c("TC_ID\tPSR_ID\tType\tUnreliable Junctions\tLinking Junctions\tExclusion Junctions\tSupported by\tIdentified by\tFold Change\tExons"),paste(Name,".txt",sep=""),sep="\n")
+	ScoresOutput=lapply(Genes, function(x) JunInfo(x,ASPSR=ASProbeSets,JLines=JAnnotI[which(JAnnotI[,1]==x),],TrLines=TrAnnotI[which(TrAnnotI[,1]==x),],ELines=EAnnotI[which(EAnnotI[,1]==x),],DataS=Data[which(as.character(Data[,1])==x),],Groups=Groups,Low_AllSamples,Low_GSamples,Plot=FALSE,Name))
 }
 
 ## FIRMA Model Analysis
@@ -1787,59 +2587,54 @@ FIRMAScores <- function(Data,InformativeExons=NULL,groups=list(group1=list(group
 
 #PLOTTING FUNCTION
 
-#' "PlotFunction"
+#' "ExpressionLevelPlot"
 #' 
-#' The PlotFunction produces three plots concerning a specific exon and its corresponding gene.
+#' The ExpressionLevelPlot produces a plot of the expression levels of a specific exon and its corresponding gene.
 #' @export
 #' @param GeneID The gene ID of the gene of interest.
 #' @param ExonID The exon ID of the exon of interest.
 #' @param Data The processed data as returned by DataProcessing. This is were the observed probe intensities will be retrieved.
-#' @param REIDS_Output The output of the REIDS model. This is were the array scores will be retrieved.
 #' @param GeneLevelData The gene level summarized data to retrieve the gene level values.
 #' @param ExonLevelData The exon level summarized data to retrieve the exon level values.
-#' @param FIRMA_Data The output of the FIRMA model to retrieve the FIRMA scores of the samples.
-#' @param groups The groups of interest in the data.
+#' @param Groups The groups of interest in the data.
 #' @param ylabel The label for the y-axis.
 #' @param title A title for the plot.
 #' @examples
 #' \dontrun{
-#' PlotFunction(GeneID="TC0100207",ExonID="PSR010002121",Data=HTAData_RASA,GDS_Output=
-#' HTAData_RASA_OutputGDSModel,GeneLevelData=HTA_GeneLevelSummarized_rma_RASA,ExonLevelData=
-#' HTA_ExonLevelSummarized_rma_RASA,FIRMA_Data=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),
-#' ylabel="",plottype="sweave",location=NULL,title="PSR010002121")
+#' data(TC12000010)
+#' data(TC12000010_ExonLevel)
+#' data(TC12000010_GeneLevel)
+#' ExpressionLevelPlot(GeneID="TC12000010",ExonID="PSR12000150",
+#' Data=TC12000010,GeneLevelData=TC12000010_GeneLevel,ExonLevelData
+#' =TC12000010_ExonLevel,Groups=list(c(10:18),c(19:27)),ylabel="",
+#' title="PSR12000150")
 #' }
-PlotFunction<-function(GeneID=NULL,ExonID=NULL,Data,REIDS_Output,GeneLevelData=NULL,ExonLevelData=NULL,FIRMA_Data=NULL,groups,ylabel=NULL,title=""){
+
+ExpressionLevelPlot<-function(GeneID=NULL,ExonID=NULL,Data,GeneLevelData=NULL,ExonLevelData=NULL,Groups,ylabel=NULL,title=""){
 	message("The gene and exon level data will be log2 transformed")
 	
 	if(is.null(GeneID) | is.null(ExonID)){
 		stop("no GeneID and/or ExonID specified")
 	}
 	
-	# Array Scores
-	ArrayScores=REIDS_Output[[which(names(REIDS_Output)==GeneID)]]$arrayScore # the arrayscores for the entire gene
-	
 	
 	Exon_ExonID=ExonLevelData[which(ExonLevelData$ExonID==ExonID),]
 	Exon_ExonID=Exon_ExonID[,-c(1,2)]
-	Exon_ExonID=log2(Exon_ExonID)
-	Exon_ExonID=Exon_ExonID[,unlist(groups)]
+	#Exon_ExonID=log2(Exon_ExonID)
+	Exon_ExonID=Exon_ExonID[,unlist(Groups)]
 	
 	
 	# Gene Level Data
 	Gene_GeneID=GeneLevelData[which(GeneLevelData$GeneID==GeneID),]
-	Gene_GeneID[,-c(1)]=log2(Gene_GeneID[,-c(1)])
+	#Gene_GeneID[,-c(1)]=log2(Gene_GeneID[,-c(1)])
 	Gene_GeneID=Gene_GeneID[,-c(1)]
-	Gene_GeneID=Gene_GeneID[,unlist(groups)]
+	Gene_GeneID=Gene_GeneID[,unlist(Groups)]
 	
-	group1=seq_along(groups$group1)
-	group2=length(groups$group1)+seq_along(groups$group2)
-#	print(t.test(x=Gene_GeneID[1,group1],y=Gene_GeneID[1,group2]))
-	
-	
+
 	# Observed Probe intensities
 	ProbeIntensities=Data[which(Data$ExonID==ExonID),]
 	ProbeIntensities_ExonID=ProbeIntensities[,-c(1,2)]
-	ProbeIntensities_ExonID=ProbeIntensities_ExonID[,unlist(groups)]
+	ProbeIntensities_ExonID=ProbeIntensities_ExonID[,unlist(Groups)]
 	
 	ProbeIntensities_ExonID=apply(ProbeIntensities_ExonID,2,as.character)
 	ProbeIntensities_ExonID=apply(ProbeIntensities_ExonID,2,as.numeric)
@@ -1852,7 +2647,7 @@ PlotFunction<-function(GeneID=NULL,ExonID=NULL,Data,REIDS_Output,GeneLevelData=N
 		ylabel=paste("Transcript",GeneID," - PSR",ExonID,sep=" ")
 	}
 	
-	graphics::plot(0,0,typ="n",xlab="",ylab=ylabel,ylim=c(0,max_ylim+2),xlim=c(1,ncol(ProbeIntensities_ExonID)),xaxt="n",frame=TRUE)
+	graphics::plot(0,0,typ="n",xlab="",ylab=ylabel,ylim=c(0,max_ylim+2),xlim=c(1,ncol(ProbeIntensities_ExonID)),xaxt="n",frame=TRUE,,cex.axis=1.5)
 	graphics::lines(x=c(1:ncol(ProbeIntensities_ExonID)),y=Gene_GeneID) #Gene level data...
 	graphics::lines(x=c(1:ncol(ProbeIntensities_ExonID)),y=Exon_ExonID,col="blue") #Exon Level data
 	for(i in 1:nrow(ProbeIntensities_ExonID)){
@@ -1860,33 +2655,207 @@ PlotFunction<-function(GeneID=NULL,ExonID=NULL,Data,REIDS_Output,GeneLevelData=N
 	}
 	graphics::axis(1,labels=colnames(Gene_GeneID),at=c(1:ncol(ProbeIntensities_ExonID)),las=2,cex.axis=1.5)	
 	title(main = title,cex.main=2)
-	#lapply(baseViewports(), pushViewport)
-	#grid.rect(y = unit(1,"npc") + unit(2, "lines"), height = unit(1.5, "lines"), just = "center")
-	#title(main = title)
-	
-	#plot reserve : plot of cdf of exon scores
-	
-#	cdf=ecdf(ExonScores$X50.)
-#	plot(sort(ExonScores$X50.),cdf(sort(ExonScores$X50.)),pch=19,xlim=c(0,1),ylim=c(0,1),xlab="Exon scores",ylab="Fn(x)")
-#	points(sort(ExonScores$X50.[which(ExonScores$exon%in%ASExons_2736322$ExonID)]),cdf(sort(ExonScores$X50.[which(ExonScores$exon%in%ASExons_2736322$ExonID)])),pch=19,col="red")
-	
-	
+
 	
 }
 
-#Top gene 3762198  Top exon 3762266
-#load("TestData/ColonCancerData.rda")
-#load("TestData/ExonLevelSummarized_rma.RData")
-#load("TestData/GeneLevelSummarized_rma.RData")
-#load("TestData/ColonCancer_OutputREIDSModel.RData")
-#load("TestData/Output_FIRMA.RData")
-#
-#groupT=c(1,14,16,18,20,3,5,7,9,11)
-#groupN=c(12,15,17,19,2,4,6,8,10,13)
-#groups=list(group1=groupN,group2=groupT)
-#
-#
-#PlotFunction(GeneID="3762198",ExonID="3762266",Data=ColonCancerData,REIDS_Output=ColonCancer_OutputREIDSModel,GeneLevelData=GeneLevelSummarized_rma,ExonLevelData=ExonLevelSummarized_rma,FIRMA_Data=Output_FIRMA,groups=groups,plottype="pdf",location="Testdata/Gene3762198_Exon3762266")
+#' "trim"
+#' 
+#' The trim function trims a long character string on gene annotation to a short single gene annotation.
+#' @param s Character vector to trim.
+trim <- function(s) {
+	s <- as.character(s);
+	s <- sub("^[\t\n\f\r[:punct:]  ]*", "", s);
+	s <- sub("[\t\n\f\r ]*$", "", s);
+	s;
+} 
+
+#' "AnnotateGenes"
+#' 
+#' The AnnotateGenes function annotates the TC ID to a HGNC Gene symbol.
+#' @param transcript.IDs The transcript IDs to annotate.
+#' @param trinfo The transcript data frame from which to retrieve the annotation symbol.
+AnnotateGenes <- function(transcript.IDs,trinfo){
+	transcripts <- as.character(trinfo[trinfo[,1] %in% transcript.IDs,][1])
+	gene.assignment <- strsplit(as.character(trinfo[trinfo[,1] %in% transcript.IDs,][,3]) , "//")
+	gene.symbols <- unlist(lapply(gene.assignment, function(assignment){
+						length <- length(assignment)
+						if(length > 2){
+							HGNC <- seq(from = 2, to = length, by = 5)
+							assignment <- unique(trim(assignment[HGNC]))
+							#assignment <- paste(assignment, collapse = "/")
+						} else{
+							assignment <- "--"} 
+					}))
+	gene.symbols[is.na(gene.symbols)]	<- "--"
+	annotate      <- data.frame(transcript = transcripts, symbol = gene.symbols)
+	annotate
+}
+
+#' "AnnotateGeneSymbol"
+#' 
+#' The AnnotateGeneSymbol function annotates HGNC Gene symbol to an ensemble region.
+#' @param symbol.to.annotate Gene symbol to annotate to an ensembl region.
+AnnotateGeneSymbol	<- function(symbol.to.annotate){
+	ensembl = biomaRt::useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl")
+	attributes.region	<- c("chromosome_name", "start_position", "end_position", "ensembl_gene_id")							
+	filter.symbol		  <- "hgnc_symbol"
+	
+	annotated.genes<-biomaRt::getBM(attributes = attributes.region, 
+			filters = filter.symbol,
+			values = symbol.to.annotate, 
+			mart = ensembl)
+	return(annotated.genes)
+}
+
+#' "GetIntensities"
+#' 
+#' The GetIntensities function retrieves the exon expression level in the data.
+#' @param  trans The transcript ID. 
+#' @param Data The data frame with the exon level expression of the transcript.
+#' @param Groups A list with the groups (columns) of interest
+GetIntensities <- function(trans, Data,Groups){
+
+	Subset=Data[Data[,1]==trans,]
+	if(any(is.na(Subset[,2]))){
+		Subset=Subset[-c(which(is.na(Subset[,2]))),]
+	}	
+#	for(i in 3:ncol(Subset)){
+#		Subset[,i]=log2(Subset[,i])			
+#	}
+	
+	M_Subset=Subset[,-c(1,2)]
+	
+	mean.intensities <- lapply(Groups, function(group){
+				if(length(group) > 1){
+					apply(M_Subset[,group], 1, mean)
+				} else {
+					M_Subset[, group]
+				}
+			})
+	mean.intensities <- t(do.call(rbind, mean.intensities))
+	gene.intensities <- as.data.frame(cbind(Subset, mean.intensities))
+	
+	return(gene.intensities)
+}
+
+
+#' "TranscriptsPlot "
+#' 
+#' The TranscriptsPlot function plots the known Ensemble transcript isoform composition plots.
+#' @export 
+#' @param trans The TC ID of the transcript to be plotted.
+#' @param positions A table with the start and stop positions of the probe sets.
+#' @param transcriptinfo A table with the transcript information of the TC ID.
+#' @param display.probesets Logical. Should the probe sets be shown?
+#' @param Data The exon level summarized data.
+#' @param Groups A list with the groups (columns) of interest in the data.
+#' @param Start Specify a specific start point on in the genome.
+#' @param Stop Specify a specific stop point on in the genome.
+#' @param Highlight A character string specifying a probe set to be highlighted in the transcript composition.
+#' @examples 
+#' \dontrun{
+#' data(positions_36)
+#' data(transcript.clusters.NetAffx.36)
+#' data(TC12000010_ExonLevel)
+#' TranscriptsPlot(trans="TC12000010", display.probesets = TRUE,Data=TC12000010_ExonLevel,
+#' Groups=list(c(10:18),c(19:27)),Start=NULL,Stop=NULL,Highlight="PSR12000150")
+#' } 
+TranscriptsPlot <- function(trans, positions, transcriptinfo, display.probesets = TRUE,Data,Groups=list(),Start=NULL,Stop=NULL,Highlight=NULL){
+	ensembl = biomaRt::useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl")
+	attributes.region	<- c("chromosome_name", "start_position", "end_position", "ensembl_gene_id")							
+	filter.symbol		  <- "hgnc_symbol"
+	
+	trans1=paste(trans,".hg",sep="")
+	exons=positions[positions$transcript_cluster_id == trans1, "probeset_id"]
+	
+	PSR=sapply(exons, function(x) substr(x,1,3)!="JUC")
+	exons=exons[PSR]
+	trans2=paste(trans1,".1",sep="")
+	symbol.to.annotate <- AnnotateGenes(transcript.IDs=trans2,trinfo=transcriptinfo)$symbol # get HBC identity
+	ensembl.output     <- AnnotateGeneSymbol(symbol.to.annotate) # get region
+	print(paste("Gene position: ",paste(ensembl.output,collapse=" "),sep=""))
+	if(nrow(ensembl.output) > 0){
+		strand <- transcriptinfo[transcriptinfo[,1] == trans2,][2]
+		title = GenomeGraphs::makeTitle(text = paste(ensembl.output[4], 
+						" (", strand,")", sep = ""), 
+				color ='darkred')
+		gene  = GenomeGraphs::makeGene(id = ensembl.output$ensembl_gene_id, biomart = ensembl)
+		transcript = GenomeGraphs::makeTranscript(id = ensembl.output$ensembl_gene_id, biomart = ensembl)
+		
+		gene.positions   <- positions[positions$probeset_id %in% exons,]
+		gene.positions$start=as.numeric(gene.positions$start)
+		gene.positions$stop=as.numeric(gene.positions$stop)
+		gene.positions<-gene.positions[order(gene.positions$start,decreasing=FALSE),]
+		gene.positions[,1]=sapply(gene.positions[,1],function(x) strsplit(x,"[.]")[[1]][1])
+		print(paste("Min Exon position: ",min(as.numeric(gene.positions$start)), " ; Max Exon position ", max(as.numeric(gene.positions$stop)),sep=""))
+		gene.n.probes	 <- rep(1, nrow(gene.positions))
+		
+		gene.intensities <- GetIntensities(trans, Data,Groups)
+		
+		if(nrow(gene.intensities)>nrow(gene.positions)){
+			gene.intensities<-gene.intensities[which(gene.intensities[,2]%in%gene.positions[,1]),]
+		}
+		else{
+			gene.positions<-gene.positions[which(gene.positions[,1]%in%gene.intensities[,2]),]
+		}
+		gene.intensities=gene.intensities[match(gene.positions[,1],gene.intensities[,2]),]
+		gene.intensities=as.matrix(gene.intensities[,-c(1,2)])
+		#** user-defined colour
+		if(length(Groups) > 2){
+			palette <- grDevices::rainbow(length(Groups))
+		} else {
+			palette <- c("red", "blue")
+		}
+		colour<- NULL
+		for(i in 1:length(Groups)){
+			colour[Groups[[i]]]   <- palette[i]
+		}
+		
+		lwd<- rep(0.05, ncol(gene.intensities)-2)
+		
+		
+		#** user-defined colour
+		colour[(length(unlist(Groups)) + 1):(length(unlist(Groups)) + length(Groups))] <- palette
+		
+		#** user-defined line width
+		lwd[(length(Groups) + 1):(length(Groups) + length(Groups))]  <- 3
+		
+		Names=sapply(gene.positions[,1],function(x) strsplit(x,"[.]")[[1]][1])
+		
+
+		exon  = GenomeGraphs::makeExonArray(intensity = gene.intensities, 
+				probeStart = as.numeric(gene.positions[,3]), 
+				probeEnd   = as.numeric(gene.positions[,4]),
+				probeId    = Names, 
+				nProbes    = gene.n.probes,
+				dp         = DisplayPars(color = colour, lwd = lwd, 
+						mapColor ='dodgerblue2'), 
+				displayProbesets =display.probesets )
+
+		
+		if(!is.null(Highlight)){
+			gene.pos<-gene.positions[gene.positions[,1]==paste(Highlight),]
+			print(paste("Highlighted Region: ",paste(gene.pos,collapse=" ")))
+			rOverlay <- makeRectangleOverlay(start = (as.numeric(gene.pos$start)-500), end = (as.numeric(gene.pos$stop)+500),region=c(2,3),dp = DisplayPars(alpha = .5, fill = "pink"))
+			if(is.null(Start)&is.null(Stop)){
+				gdPlot(list(exon,gene,transcript),overlays = rOverlay)
+			}
+			else{
+				gdPlot(list(exon,gene,transcript),Start,Stop,overlays = rOverlay)
+			}
+		}
+		else{
+			
+			if(is.null(Start)&is.null(Stop)){
+				gdPlot(list(exon,gene,transcript))
+			}
+			else{
+				gdPlot(list(exon,gene,transcript),Start,Stop)
+			}
+		}
+	}
+}
 
 # SI Index
 #' "SpliceIndex"
@@ -1896,7 +2865,7 @@ PlotFunction<-function(GeneID=NULL,ExonID=NULL,Data,REIDS_Output,GeneLevelData=N
 #' @param GeneData The microarray data summarized at gene level.
 #' @param ExonData The microarray data summarized at exon level.
 #' @param InformativeExons A character vector of exon IDs. As for the REIDS model probesets are filtered out by I/NI calls model and later on exon score, the remaining exons can be specified here. Only these shall be considered in the FIRMA analysis to make the results between REIDS and FIRMA more comparable
-#' @param groups The groups of interest in the data. Default two groups are specificied byut more can added as group3, group4,...
+#' @param Groups A list with the groups (columns) of interest in the data.
 #' @param paired Logical. Are the groups paired? only used if two groups are present.
 #' @param significancelevel If specified, filtering is conducted on the p-values.
 #' @return A data frame wiith one line per exon. The columns conatin the gene ID, the exon ID, the ratio of the splice indices if two groups are present, a t- or F-statitic, a p-value and an adjusted p-value.
@@ -1905,22 +2874,19 @@ PlotFunction<-function(GeneID=NULL,ExonID=NULL,Data,REIDS_Output,GeneLevelData=N
 #' A t-test is conducted on the splice indices of the two groups to test their difference. If more than two groups are specified, an ANOVA model is fitted on the splice indices to discover with an F-test whether there is a difference between the groups somewhere. If a vector of informative exons is given 
 #' to the function, only these are considered for the analysis. Finally, the p-values are adjusted for multiplicity and if a significance level is specified only the significant p-valuesare kept in the data frame.
 #' @examples
-#' data(ExampleGeneLevel)
-#' data(ExampleGeneLevel)
-#' SI_Test=SpliceIndex(GeneData=ExampleGeneLevel,ExonData=ExampleExonLevel,
-#' InformativeExons=NULL,groups=list(group1=c(1,2,3),group2=c(4,5,6)),paired=FALSE,
-#' significancelevel=NULL)
-SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=NULL){
-	message("The gene and exon level data will be log2 transformed")
-	
-	GeneData[,-c(1)]=log2(GeneData[,-c(1)])
-	ExonData[,-c(1,2)]=log2(ExonData[,-c(1,2)])
+#' data(TC12000010_ExonLevel)
+#' data(TC12000010_GeneLevel)
+#' SI_Test=SpliceIndex(GeneData=TC12000010_GeneLevel,ExonData=TC12000010_ExonLevel
+#' ,InformativeExons=NULL,Groups=list(group1=c(1:9),group2=c(10:18)),
+#' paired=FALSE,significancelevel=NULL)
+SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,Groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=NULL){
+
 	
 	if(!is.null(InformativeExons)){
 		ExonData=ExonData[which(ExonData$ExonID%in%as.character(InformativeExons)),]
 	}
 
-	GeneID=intersect(GeneData$GeneID,ExonData$GeneID)  #special measure for the HTA Data : ExonLevel has Gene IDs from the mapping while GeneLevel has those of the ENSg cdf: different genes
+	GeneID=intersect(GeneData[,1],ExonData[,1])  #special measure for the HTA Data : ExonLevel has Gene IDs from the mapping while GeneLevel has those of the ENSg cdf: different genes
 	
 	
 	si<-function(ID,DG,DE,groups,paired){
@@ -1929,13 +2895,13 @@ SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1
 		
 		DataE=DataE[!duplicated(rownames(DataE)), ,drop=FALSE]
 		
-		grouping=c(groups$group1,groups$group2)
+		grouping=c(groups[[1]],groups[[2]])
 		
 		DataE=DataE[,grouping,drop=FALSE]
 		DataG=DataG[,grouping,drop=FALSE]
 		
-		group1=seq_along(groups$group1)
-		group2=length(group1)+seq_along(groups$group2)
+		group1=seq_along(groups[[1]])
+		group2=length(group1)+seq_along(groups[[2]])
 		groups=list(group1=group1,group2=group2)
 		
 		NormData=sweep(DataE,2,DataG,"-")  #The Normalized Expression Data ( "-" because  log2 is already taken)
@@ -1997,14 +2963,14 @@ SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1
 	}
 	
 	
-	if(length(groups)==2){
+	if(length(Groups)==2){
 		#2 groups ; perform splice index analysis with t-test
-		out=lapply(GeneID,function(x) si(ID=x,DG=GeneData[which(GeneData$GeneID==x),],DE=ExonData[which(ExonData$GeneID==x),],groups=groups,paired=paired)) #for every gene
+		out=lapply(GeneID,function(x) si(ID=x,DG=GeneData[which(GeneData[,1]==x),],DE=ExonData[which(ExonData[,1]==x),],groups=Groups,paired=paired)) #for every gene
 		names(out)=GeneID
 	}
 	
-	if(length(groups)>2){
-		out=lapply(GeneID,function(x) midas(ID=x,DG=GeneData[which(GeneData$GeneID==x),],DE=ExonData[which(ExonData$GeneID==x),],groups=groups)) #for every gene
+	if(length(Groups)>2){
+		out=lapply(GeneID,function(x) midas(ID=x,DG=GeneData[which(GeneData[,1]==x),],DE=ExonData[which(ExonData[,1]==x),],groups=Groups)) #for every gene
 		names(out)=GeneID
 	}
 	
@@ -2015,12 +2981,15 @@ SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1
 	out2<-split(out1,fac)
 	
 	replacerownames<-function(ID,names,Data){
-		print(ID)
+		if(any(is.na(names))){
+			Data=Data[-c(which(is.na(names))),]
+			names=names[-c(which(is.na(names)))]		
+		}
 		rownames(Data)=names
 		return(Data)
 	}
 	
-	output=lapply(1:length(GeneID),function(x) replacerownames(ID=x,names=ExonData[which(ExonData$GeneID==GeneID[x]),2],Data=out2[[which(names(out2)==GeneID[x])]])) 
+	output=lapply(1:length(GeneID),function(x) replacerownames(ID=x,names=ExonData[which(ExonData[,1]==GeneID[x]),2],Data=out2[[which(names(out2)==GeneID[x])]])) 
 	names(output)=GeneID
 	
 	output2=do.call(rbind.data.frame, output)
@@ -2028,8 +2997,8 @@ SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1
 	Names=strsplit(rownames(output2),"[.]")
 	Names=do.call(rbind.data.frame, output)
 	colnames(Names)=c("GeneID","ExonID")
-	Names$GeneID=as.character(Names$GeneID)
-	Names$ExonD=as.character(Names$ExonID)
+	Names$GeneID=as.character(Names[,1])
+	Names$ExonD=as.character(Names[,1])
 	
 	SI=cbind(GeneID=Names$GeneID,ExonID=Names$ExonID,output2)
 	rownames(SI)=seq(1:nrow(SI))
@@ -2043,7 +3012,533 @@ SpliceIndex<-function(GeneData,ExonData,InformativeExons=NULL,groups=list(group1
 	
 }
 
+#' @title Graph Information
+#' 
+#' @description Gets graph information
+#' 
+#' @param edgelist basically a two-column matrix with edges 
+#' @param vertices optional vector of vertex names corresponding with 
+#' those in the edgelist
+#' @param sorted logical to indicate if nodes should be sorted 
+#' (default \code{FALSE})
+#' @param decreasing logical to indicate type of sorting 
+#' (used only when \code{sorted=TRUE})
+#' @param ordering optional numeric or string vector providing the 
+#' ordering of nodes. When provided, this parameter overrides 
+#' \code{sorted=TRUE}). See the details section for more information.
+#' @param labels optional string vector with labels for the nodes
+#' @keywords internal
+graph_info <- 
+		function(edgelist, vertices, sorted = FALSE, decreasing = FALSE, 
+				ordering = NULL, labels = NULL)
+{
+	# ======================================================
+	# Checking arguments
+	# ======================================================
+	# edgelist as a two-column matrix
+	if (!is.matrix(edgelist) || ncol(edgelist) != 2)
+		stop("\nSorry, 'edgelist' must be a two column matrix")
+	
+	num_edges = nrow(edgelist)
+	# get nodes (this could be numeric or character)
+	if(hasArg(vertices)){
+		#to deal with singleton nodes
+		nodes = vertices 
+	}else{
+		nodes = unique(as.vector(t(edgelist)))  
+	}
+	num_nodes = length(nodes)
+	# check labels (i.e. node names)
+	if (!is.null(labels))
+	{
+		if (length(labels) != num_nodes)
+			stop("\nLength of 'labels' differs from number of nodes")
+	} else {
+		labels = nodes
+	}
+	
+	# auxiliar order (this may change if sorted or ordering required)
+	aux_ord = 1:num_nodes  
+	
+	# If sorted is required, ennumerate nodes
+	if (sorted) {
+		ordered_nodes = order(nodes, decreasing = decreasing)
+		nodes = nodes[ordered_nodes]
+		labels = labels[ordered_nodes]
+		# auxiliar order
+		aux_ord = ordered_nodes
+	}
+	
+	# If ordering is provided, re-ennumerate nodes
+	if (!is.null(ordering)) 
+	{
+		if (length(ordering) != num_nodes) {
+			stop("\nLength of 'ordering' differs from number of nodes")      
+		}
+		
+		if (is.character(ordering)) {
+			# make sure labels contains elements in ordering
+			unmatched_ordering <- !(ordering %in% labels)
+			if (any(unmatched_ordering)) {
+				undetected = ordering[unmatched_ordering]
+				stop(sprintf("\nUnrecognized values in ordering: '%s'", undetected))
+			}
+			ordering = match(ordering, labels)
+		}
+		
+		nodes = nodes[ordering]
+		labels = labels[ordering]
+		# auxiliar order
+		aux_ord = ordering
+	}
+	
+	## output
+	list(
+			nodes = nodes,
+			labels = labels,
+			num_nodes = num_nodes,
+			num_edges = num_edges,
+			aux_ord = aux_ord
+	)
+}
 
+
+#' @title X or Y coordinates of node locations
+#' 
+#' @description
+#' Gives axis locations of each node
+#'  
+#' @param num_nodes number of nodes
+#' @param aux_ord vector with the index number for ordering the nodes
+#' @param labels optional string vector with labels for the nodes
+xynodes <- function(num_nodes, aux_ord, labels)
+{
+	# ======================================================
+	# Coordinates of nodes (i.e. vertices)
+	# ======================================================
+	# node labels at equal distances from each other
+	nf = rep(1 / num_nodes, num_nodes)
+	# center coordinates of node labels
+	fin = cumsum(nf)
+	ini = c(0, cumsum(nf)[-num_nodes])
+	centers = (ini + fin) / 2
+	names(centers) = labels[aux_ord]
+	
+	# output
+	centers
+}
+
+
+#' @title Arc Radius Locations
+#' 
+#' @description Computes the location and radius of each arc
+#' 
+#' @param edgelist 2-column matrix
+#' @param nodes vector of nodes
+#' @param centers vector with xy-positions of nodes
+#' @return a list with locations and radios
+#' @return \item{locs}{locations}
+#' @return \item{radios}{radius values}
+#' @keywords internal
+arc_radius_locs <- function(edgelist, nodes, centers)
+{
+	# ======================================================
+	# Coordinates of arcs (i.e. edges)
+	# ======================================================
+	# handy matrix with numeric indices '1:FROM' , '2:TO'
+	edges_from_to = matrix(0, nrow(edgelist), 2)
+	for (i in 1L:nrow(edgelist))
+	{
+		edges_from_to[i,1] = centers[which(nodes == edgelist[i,1])]
+		edges_from_to[i,2] = centers[which(nodes == edgelist[i,2])]
+	}
+	
+	# maximum radius of arcs 
+	radios = abs(edges_from_to[,1] - edges_from_to[,2]) / 2
+	max_radios = which(radios == max(radios))
+	max_rad = unique(radios[max_radios] / 2)    
+	
+	# arc locations
+	locs = rowSums(edges_from_to) / 2
+	
+	# output
+	list(locs = locs, radios = radios)
+}
+
+
+#' @title Above or Below
+#' 
+#' @description Determines how arcs should be displayed
+#' @details 
+#' If \code{horizontal = TRUE} then arcs can be plotted above or 
+#' below the horizontal axis \cr
+#' If \code{horizontal = FALSE} then arcs can be plotted to the right or 
+#' left of the vertical axis
+#' @param edgelist two-column matrix
+#' @param above optional numeric or logical vector indicating what edges 
+#' (arcs) should be plotted above (or to the right of) of chosen axis
+#' If \code{above = NULL} then all arcs are plotted above (or to the right) 
+#' If \code{above} is numeric, it cannot contain both positive and negative
+#' indices.
+#' If \code{above} is logical, its length must equal the number of rows in
+#' \code{edgelist}
+#' @return a logical vector indicating how arcs should be displayed
+#' @keywords internal
+above_below <- function(edgelist, above)
+{
+	# ======================================================
+	# Coordinates of arcs (i.e. edges) below the axis
+	# ======================================================
+	# check above
+	if (is.null(above)) {
+		above = rep(TRUE, nrow(edgelist))     
+	} else {
+		if (length(above) > nrow(edgelist))
+			stop("\nlength of 'above' exceeds number of rows in 'edgelist'")
+		# check numeric above and convert to logical
+		if (is.numeric(above)) {
+			above_positive <- any(above > 0)
+			above_negative <- any(above < 0)
+			if (above_positive & above_negative)
+				stop("\n'above' cannot contain both negative and positive indices")
+			# convert to logical
+			if (all(above > 0)) {
+				above = 1:nrow(edgelist) %in% above
+			}
+			if (all(above < 0)) {
+				above <- !(-(1:nrow(edgelist)) %in% above)
+			}
+			if (all(above == 0)) {
+				above = rep(FALSE, nrow(edgelist))          
+			}
+		}
+		# check logical above
+		if (is.logical(above)) {
+			if (length(above) != nrow(edgelist))
+				stop("\nlength of 'above' must equal number of rows in 'edgelist'")
+		}
+	}
+	
+	# output
+	above
+}
+
+
+#' @title Minimum and Maximum Margin Limits
+#' @description Computes the minimum and maximum margin limits of 
+#' plotting region
+#' @param radios vector of arc radius
+#' @param above logical vectors indicating whether arcs should be displayed
+#' @return list with minimum and maximum margin limits
+#' @keywords internal
+min_max_margin <- function(radios, above)
+{
+	# determine maximum radius
+	max_radios = which(radios == max(radios))
+	
+	# minimum and maximum margin limits
+	lim_min = 0
+	lim_max = 0
+	
+	above_radios = radios[above]
+	if (length(above_radios > 0)) {
+		max_above_radios = which(above_radios == max(above_radios))[1]
+		lim_max = above_radios[max_above_radios]
+	}
+	
+	below_radios = radios[!above]
+	if (length(below_radios > 0)) {
+		max_below_radios = which(below_radios == max(below_radios))[1]
+		lim_min = -1 * below_radios[max_below_radios]
+	}
+	
+	# margin limits
+	list(min = lim_min, max = lim_max)
+}
+
+
+
+
+#' @title Arc Diagram Plot
+#' 
+#' @description
+#' Give me an edgelist and I'll help you plot a pretty damn arc diagram
+#' 
+#' @details
+#' The arcs are scaled such that they fit in a plot region with its
+#' x-axis ranging from zero to one. Node symbols and labels can be
+#' optionally displayed. Node symbols are displayed through
+#' the function \code{points}. In turn, node labels are displayed
+#' through the function \code{mtext}.
+#' 
+#' When \code{ordering} is provided in numeric format and node labels are 
+#' strings, the labels are alphabetically ordered first, and then nodes are 
+#' sorted according to the provided \code{ordering}.
+#' 
+#' If \code{ordering} is provided in string format, the node labels must be 
+#' strings as well. The nodes will be sorted according to \code{ordering}.
+#' 
+#' @param edgelist basically a two-column matrix with edges 
+#' @param vertices optional vector of vertex names corresponding with 
+#' those in the edgelist
+#' @param sorted logical to indicate if nodes should be sorted 
+#' (default \code{FALSE})
+#' @param decreasing logical to indicate type of sorting 
+#' (used only when \code{sorted=TRUE})
+#' @param ordering optional numeric or string vector providing the 
+#' ordering of nodes. When provided, this parameter overrides 
+#' \code{sorted=TRUE}). See the details section for more information.
+#' @param labels optional string vector with labels for the nodes
+#' @param horizontal logical indicating whether to plot 
+#' in horizontal orientation
+#' @param above optional vector indicating which arcs should be displayed
+#' above (or to the right) and below (or to the left) of the axis
+#' @param col.arcs color for the arcs (default \code{"gray50"})
+#' @param lwd.arcs line width for the arcs (default 1)
+#' @param lty.arcs line type for the arcs (see \code{\link{par}})
+#' @param lend the line end style for the arcs (see \code{\link{par}})
+#' @param ljoin the line join style for the arcs (see \code{\link{par}})
+#' @param lmitre the line mitre limit for the arcs (see \code{\link{par}})
+#' @param show.nodes logical indicating whether to show node symbols
+#' @param pch.nodes plotting 'character', i.e. symbol to use when
+#' plotting nodes (\code{pch.nodes=0:25})
+#' @param cex.nodes expansion of the node symbols (default 1)
+#' @param col.nodes color of the node symbols (default \code{"gray50"})
+#' @param bg.nodes background (fill) color for the node symbols 
+#' given by \code{pch.nodes=21:25}
+#' @param lwd.nodes line width for drawing node symbols 
+#' (see \code{\link{points}})
+#' @param show.labels logical indicating whether to show node labels
+#' @param col.labels color of the node labels (default \code{"gray50"})
+#' @param cex.labels expansion of node labels (default \code{"gray50"})
+#' @param las numeric in {0,1,2,3}; the style of axis labels 
+#' (see \code{\link{par}})
+#' @param font font used for node labels (see \code{\link{par}})
+#' @param line on which margin line the node labels are displayed, 
+#' starting at 0 counting outwards (see \code{\link{mtext}})
+#' @param outer use outer margins, if available, to plot node labels
+#' (see \code{\link{mtext}})
+#' @param adj adjustment for each string in reading direction 
+#' (see \code{\link{mtext}})
+#' @param padj adjustment for each string perpendicular to 
+#' the reading direction (see \code{\link{mtext}})
+#' @param axes logical indicating whether to plot the axes 
+#' (default \code{FALSE})
+#' @param ... further graphical parameters (see \code{\link{par}}), including
+#' \code{family}, \code{xpd}, \code{main}, \code{asp}, etc.
+#' @author Gaston Sanchez
+arcplot <- function(
+		edgelist, vertices, sorted = FALSE, decreasing = FALSE, ordering = NULL, 
+		labels = NULL, horizontal = TRUE, above = NULL, 
+		col.arcs = "#5998ff77", lwd.arcs = 1.8, lty.arcs = 1, 
+		lend = 1, ljoin = 2, lmitre = 1, show.nodes = TRUE, pch.nodes = 19, 
+		cex.nodes = 1, col.nodes = "gray80", bg.nodes = "gray80", lwd.nodes = 1,
+		show.labels = TRUE, col.labels = "gray55",
+		cex.labels = 0.9, las = 2, font = 1, line = 0, 
+		outer = FALSE, adj = NA, padj = NA, axes = FALSE, ...)
+{
+	# Get graph information
+	if (hasArg(vertices)) { 
+		nodes_edges = graph_info(edgelist, vertices = vertices, sorted = sorted, 
+				decreasing = decreasing, 
+				ordering = ordering, labels = labels)
+	} else {
+		nodes_edges = graph_info(edgelist, sorted = sorted, decreasing = decreasing, 
+				ordering = ordering, labels = labels)
+	}
+	nodes = nodes_edges$nodes
+	num_nodes = nodes_edges$num_nodes
+	num_edges = nodes_edges$num_edges
+	aux_ord = nodes_edges$aux_ord
+	labels = nodes_edges$labels
+	
+	# x-y node coordinates
+	centers = xynodes(num_nodes, aux_ord, labels)
+	
+	# determine above or below display of arcs
+	above = above_below(edgelist, above)
+	
+	# arc radius and locations
+	radios_locs = arc_radius_locs(edgelist, nodes, centers)
+	radios = radios_locs$radios
+	locs = radios_locs$locs
+	
+	# ======================================================
+	# Graphical parameters for Arcs
+	# ======================================================
+	# color of arcs
+	if (length(col.arcs) != num_edges) 
+		col.arcs = rep(col.arcs, length=num_edges)
+	# line width of arcs
+	if (length(lwd.arcs) != num_edges) 
+		lwd.arcs = rep(lwd.arcs, length=num_edges)
+	# line type of arcs
+	if (length(lty.arcs) != num_edges) 
+		lty.arcs = rep(lty.arcs, length=num_edges)
+	
+	# ======================================================
+	# Graphical parameters for Nodes
+	# ======================================================
+	# pch symbol of nodes
+	if (length(pch.nodes) != num_nodes) {
+		pch.nodes = rep(pch.nodes, length = num_nodes)    
+	}
+	pch.nodes = pch.nodes[aux_ord]
+	# cex of nodes
+	if (length(cex.nodes) != num_nodes) {
+		cex.nodes = rep(cex.nodes, length = num_nodes)    
+	}
+	cex.nodes = cex.nodes[aux_ord]
+	# color of nodes
+	if (length(col.nodes) != num_nodes) {
+		col.nodes = rep(col.nodes, length = num_nodes)    
+	}
+	col.nodes = col.nodes[aux_ord]
+	# bg of nodes
+	if (length(bg.nodes) != num_nodes) {
+		bg.nodes = rep(bg.nodes, length = num_nodes)    
+	}
+	bg.nodes = bg.nodes[aux_ord]
+	# line widths of nodes
+	if (length(lwd.nodes) != num_nodes) {
+		lwd.nodes = rep(lwd.nodes, length = num_nodes)    
+	}
+	lwd.nodes = lwd.nodes[aux_ord]
+	
+	# ======================================================
+	# Graphical parameters for Node Labels
+	# ======================================================
+	# color of labels
+	if (length(col.labels) != num_nodes) {
+		col.labels = rep(col.labels, length = num_nodes)    
+	} 
+	col.labels = col.labels[aux_ord]
+	# cex of labels
+	if (length(cex.labels) != num_nodes) {
+		cex.labels = rep(cex.labels, length = num_nodes)    
+	}
+	cex.labels = cex.labels[aux_ord]
+	
+	# ======================================================
+	# Plot arc diagram (horizontally or vertically)
+	# ======================================================
+	# auxiliar vector for plotting arcs
+	z = seq(0, pi, length.out = 100)
+	
+	if (horizontal) {
+		side = 1 
+	} else {
+		side = 2
+	}
+	xlim=NULL
+	ylim=NULL
+	if (is.null(xlim)) {
+		if (horizontal) {
+			xlim = c(-0.015, 1.015)
+			x_nodes = centers
+		} else {
+			xlims = min_max_margin(radios, above)
+			xlim = c(xlims$min, xlims$max)
+			x_nodes = rep(0, num_nodes)
+		}
+	} else {
+		if (horizontal) {
+			x_nodes = centers
+		} else {
+			x_nodes = rep(0, num_nodes)
+		}
+	}
+	
+	if (is.null(ylim)) {
+		if (horizontal) {
+			ylims = min_max_margin(radios, above)
+			ylim = c(ylims$min, ylims$max)
+			y_nodes = rep(0, num_nodes) 
+		} else {
+			ylim = c(-0.015, 1.015)
+			y_nodes = centers
+		}
+	} else {
+		if (horizontal) {
+			y_nodes = rep(0, num_nodes) 
+		} else {
+			y_nodes = centers
+		}
+	}
+	
+	# open empty plot window
+	graphics::plot(0.5, 0.5, xlim = xlim, ylim = ylim, type = "n", 
+			xlab = "", ylab = "", axes = axes, ...)
+	# add each edge
+	for (i in 1L:num_edges)
+	{
+		# get radius length
+		radio = radios[i]
+		if (horizontal) {
+			# x-y coords of each arc
+			x_arc = locs[i] + radio * cos(z)
+			if (above[i]) { # above axis
+				y_arc = radio * sin(z)
+			} else {  # below axis
+				y_arc = radio * sin(-z)
+			}
+		} else {
+			# x-y coords of each arc
+			y_arc = locs[i] + radio * cos(z)
+			if (above[i]) { # above axis
+				x_arc = radio * sin(z)
+			} else {  # below axis
+				x_arc = radio * sin(-z)
+			}      
+		}
+		
+		# plot arc connecting nodes
+		graphics::lines(x_arc, y_arc, col=col.arcs[i], lwd=lwd.arcs[i], lty=lty.arcs[i],
+				lend=lend, ljoin=ljoin, lmitre=lmitre)
+		# add node symbols with points
+		if (show.nodes) {
+			graphics::points(x=x_nodes, y=y_nodes, pch=pch.nodes, 
+					col=col.nodes, bg=bg.nodes, cex=cex.nodes, lwd=lwd.nodes)    
+		}
+		# add node labels with mtext
+		if (show.labels) {
+			graphics::mtext(labels, side=side, line=line, at=centers, cex=cex.labels, outer=outer,
+					col=col.labels, las=las, font=font, adj=adj, padj=padj, ...)    
+		}
+	}
+}
+
+
+#' @title Node Coordinates
+#' 
+#' @description
+#' Computes axis locations of each node. This function can be helpful when 
+#' you want to separately plot the node labels using the function mtext.
+#'
+#' @param edgelist basically a two-column matrix with edges 
+#' @param sorted logical to indicate if nodes should be sorted
+#' @param decreasing logical to indicate type of sorting 
+#' @param ordering optional numeric vector providing the ordering of nodes
+#' @param labels character vector with labels for the nodes
+#' @return a vector with the location of nodes in the x-axis
+#' @author Gaston Sanchez
+node_coords <- function(
+		edgelist, sorted = FALSE, decreasing = FALSE, ordering = NULL, 
+		labels = NULL)
+{
+	# Get graph information
+	nodes_edges = graph_info(edgelist, sorted = sorted, decreasing = decreasing, 
+			ordering = ordering, labels = labels)
+	
+	nodes = nodes_edges$nodes
+	num_nodes = nodes_edges$num_nodes
+	num_edges = nodes_edges$num_edges
+	aux_ord = nodes_edges$aux_ord
+	labels = nodes_edges$labels
+	
+	# x-y node coordinates
+	centers = xynodes(num_nodes, aux_ord, labels)
+}
 if(getRversion() >= "2.15.1"){
 	globalVariables(c("Arguments"))
 }

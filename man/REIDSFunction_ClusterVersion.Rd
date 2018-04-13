@@ -5,7 +5,7 @@
 \title{"REIDS_ClusterVersion"}
 \usage{
 REIDSFunction_ClusterVersion(geneData, nsim = 1000, geneID,
-  informativeCalls = TRUE, alpha = 0.5)
+  informativeCalls = TRUE, rho = 0.5, Low_AllSamples)
 }
 \arguments{
 \item{geneData}{The data with as rows the probesets and as columns the samples. Note that the first column should contain the gene IDs and the second column the exon IDs}
@@ -16,7 +16,9 @@ REIDSFunction_ClusterVersion(geneData, nsim = 1000, geneID,
 
 \item{informativeCalls}{Logical. Should the I/NI calls method be perform before applying the REIDS model?}
 
-\item{alpha}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than alpha are kept.}
+\item{rho}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.}
+
+\item{Low_AllSamples}{A character vector containing the probe sets which are not DABG in all samples.}
 }
 \value{
 A .RData file will be saved for each gene with the elements returned by the iniREIDS and REIDS functions.

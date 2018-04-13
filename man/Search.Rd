@@ -23,10 +23,8 @@ The returned value is a list with two elements. The first element is SearchResul
 The Search function investigates whether specific genes and/or exons are present in the data. It returns the elements of the found elements and a list of those that were not found.
 }
 \examples{
-data(ExampleData)
-Test=REIDSFunction(geneData=ExampleData,nsim=10,geneID=ExampleData[,1],exonID=ExampleData[,2],
-informativeCalls=TRUE,alpha=0.5)
-Test_F=FilterInformativeGenes(Test)
-Test_S=Search(WhatToLookFor=data.frame(ExonID=c("PSR010002125")),Data=Test_F,
+data(TC12000010_REIDS_Output)
+Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
+Test_S=Search(WhatToLookFor=data.frame(ExonID=c("PSR12000150")),Data=Test_F,
 AggregateResults=FALSE,NotFound=NULL)
 }
