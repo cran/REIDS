@@ -1,0 +1,12 @@
+#!/bin/bash -l
+#PBS -l walltime=03:00:00:00,nodes=1:ppn=20
+#PBS -m abe
+#PBS -M marijke.vanmoerbeke@uhasselt.be
+#PBS -A lp_h_gdsproject
+
+source switch_to_2015a
+cd $VSC_SCRATCH/REMAP
+
+export OMP_NUM_THREADS=1
+
+python REMAP_ExtractInfo.py HJAY_Output/GeneAllInfo.txt HJAY_Output/GeneInfo.csv HJAY_REMAP.txt

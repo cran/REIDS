@@ -35,7 +35,7 @@ data(TC12000010_ExonLevel)
 data(TC12000010_GeneLevel)
 ExpressionLevelPlot(GeneID="TC12000010",ExonID="PSR12000150",
 Data=TC12000010,GeneLevelData=TC12000010_GeneLevel,ExonLevelData
-=TC12000010_ExonLevel,Groups=list(c(10:18),c(19:27)),ylabel="",
+=TC12000010_ExonLevel,Groups=list(c(1:9),c(10:18)),ylabel="",
 title="PSR12000150")
 }
 }

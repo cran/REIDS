@@ -4,16 +4,15 @@
 \alias{REIDSmodel_intern}
 \title{"REIDSmodel_intern"}
 \usage{
-REIDSmodel_intern(SubgeneData, nsim = 100)
+REIDSmodel_intern(SubgeneData, nsim = 1000)
 }
 \arguments{
 \item{SubgeneData}{A subset of the data. Particularly, a subset of the data corresponding to one gene.}
 
-\item{nsim}{The number of iterations to perform.}
+\item{nsim}{The number of iterations to perform. Defaults to 1000.}
 }
 \value{
-A list with 2 items per gene. The first item is the exon scores of the corresponding probesets and the second contains a data frame with the array scores of the exons across the samples.
-If the iniREIDS model was performed. The items will be added to the previously made list.
+A list with 2 items per gene. The first item is the exon scores of the corresponding probesets and the second contains a data frame with the array scores of the exons across the samples. If the iniREIDS model was performed. The items will be added to the previously made list.
 }
 \description{
 The function is part of the larger REIDS function and performs the REIDS model on the data for a single gene.

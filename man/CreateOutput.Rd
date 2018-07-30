@@ -4,18 +4,22 @@
 \alias{CreateOutput}
 \title{"CreateOutput"}
 \usage{
-CreateOutput(ID, Name, Location = "")
+CreateOutput(ID, Groups, Location = "", Name)
 }
 \arguments{
 \item{ID}{A data frame with a "geneID" column.}
 
-\item{Name}{A name for the returned list.}
+\item{Groups}{A list with elements specifying the columns of the data in each group.}
 
 \item{Location}{The location where the file should be saved.}
+
+\item{Name}{A name for the returned list.}
 }
 \value{
-A list with the output of the REIDS_ClusterVersion binded together for all genes.
+.txt files with the information of the REIDSFunction and REIDSJunctionAssesment.
 }
 \description{
-The CreateOutput functions bind the .RData files returned by the REIDS_ClusterVersion together into one list with an element per gene. The function is advised to be used with the CreateOutput.R and CreateOutput.pbs file in the documentation folder.
+The CreateOutput functions writes the .RData files returned by the REIDS_HPCVersion to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt". 
+The function can also be used for the returned files of REIDSIsoformAssesment_HPCVersion for which it will create the files: "Name_ASInfo.txt" "Name_Compositions.txt","Name_GroupTranscripts.txt" and "Name_NovelConnections".
+The function is advised to be used with the CreateOutput.R and CreateOutput.pbs file in the documentation folder.
 }

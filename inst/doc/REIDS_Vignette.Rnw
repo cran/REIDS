@@ -2,6 +2,9 @@
 \documentclass[a4paper]{article}
 \usepackage[english]{babel}
 \usepackage{natbib}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{tcolorbox}
 \usepackage{Sweave}
 \usepackage{float}
 \usepackage{textcomp}
@@ -31,8 +34,8 @@ on an ordinary laptop but those who have a high-performance computing
 (HPC) service freely available have the advantage to use this service for
 the regular analysis as well. We will demonstrate an example step by step after
 giving a short introduction of the used methodology. The package accompagnies
-the papers by \citet{VanMoerbeke2017} and \citet{VanMoerbeke2018} which introduce
-the REIDS model.
+the papers by \citet{VanMoerbeke2017} and \citet{VanMoerbeke2018} which
+introduce the REIDS model.
 \section{Methodology}
 The Random Effects for Identification of Differential Splicing (REIDS) model is
 situated in a mixed model framework. Alternative splicing detection can now be formulated as variance
@@ -88,96 +91,120 @@ The parameters of the proposed mixed effects model are estimated within the
 Bayesian framework with vague proper priors since the full conditional posterior
 distributions for the parameters of interest are known. More information
 can be found in \citet{VanMoerbeke2017} and \citet{VanMoerbeke2018}.
-\section{Preprocessing of the Microarray}
-\subsection{Annotation File Creating}
-In order for the REIDS function to work an exon annotation file, a transcript annotation file
-and a junction annotation file are needed. These can be created by using the
-"HTA-2\_0.na35.hg19.probeset.csv" file and the python scripts included in the
-package.
-Run the script either in the folder which contains
-"HTA-2\_0.na35.hg19.probeset.csv" or alter the python script to include the path to the file.\\ \\
-The first python script will create exon and transcript annotations. The output
-files are respectively "HTA-2\_0\_ExonAnnotations.txt",
-"HTA-2\_0\_TranscriptAnnotations.txt", "LineIndexing\_ExonAnnot.txt" and
-"LineIndexing\_TrAnnot.txt". The former two files contain the annotations, the
-latter two files are indexing files which are used in the R code to prevent the loading of the entire files. The script is executed as:
+\section{Annotation} 
+Two supplementary files are needed to make optimal use of the REIDS functionality: an annotation file between probe sets, exons and isoforms and a mapping file between probe sets and junctions. A file with a mapping between the probe sets , exon and isoform annotations is required to have the following format:
 \begin{verbatim}
-python HTA-2_0_ExonAndTranscriptAnnotations.py   
+TC0200480_PROM2	PSR020003983	ENSE00003585208		ENST00000431567	1	ENSG00000155066
+TC0200480_PROM2	PSR020003983	ENSE00003601191		ENST00000403131	1	ENSG00000155066
+TC0200480_PROM2	PSR020003983	ENSE00003601191		ENST00000317668	1	ENSG00000155066
+TC0200480_PROM2	PSR020003983	ENSE00003601191		ENST00000317620	1	ENSG00000155066
+TC0200480_PROM2	JUC0200032386	ENSE00003546149	3.0	ENST00000403131	1	ENSG00000155066
+TC0200480_PROM2	JUC0200032386	ENSE00003546149	3.0	ENST00000317668	1	ENSG00000155066
 \end{verbatim}
-The second python script will create junction associations based on the exon annotations. 
-The output files are respectively "HTA-2\_0\_JunAnnotations.txt" and
-"LineIndexing\_JAnnot.txt". The script is executed as:
+A mapping file between the probe sets and exons is required to have the following format:
 \begin{verbatim}
-$ python HTA-2_0_JunAssociations.py
+TC01000001	PSR01000005	JUC01000001	3
+TC01000001	PSR01000008	JUC01000001	5
+TC01000001	PSR01000007	JUC01000001	exclusion
+TC01000001	PSR01000005	JUC01000002	3
+TC01000001	PSR01000007	JUC01000002	5
+TC01000001	PSR01000002	JUC01000003	3
 \end{verbatim}
-The first script will not take long, the second script will (a day). Please feel free to alter the code to speed things up or retrieve junction associations from the exon annotations in the R code directly
-(changes are needed in the JunctionAssesment function). Other mappings than
-Affymetrix' can be used as well if the files have the structure. \\ \\
-The "HTA-2\_0\_ExonAnnotations.txt" is:
+These files can be generated in differently, depending on the preference of the user. We outline three procedures to retrieve the required annotations.
+\begin{itemize}
+\item {\bf The manufacturer's information}\\ \\
+A mapping between the probe sets and the annotated exons and isoforms can be retrieved from the manufacturer's information. The python script \texttt{ExonAndTranscriptAnnotations.py}
+collects all necessary information from a file with exon and junction probe set annotations. The function was designed according to the lay-out of an Affymetrix file "HTA-2\_0.na35.hg19.probeset.csv". Two files are returned to the user. The first output file is given a user specified name and contains the exon and isoform annotations. the second output file ("LineIndexing\_EAnnot\_TrAnnot.txt") is an indexing file used in the R code to prevent the loading of the entire annotation file. 
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-	TC01000001	JUC01000001	+	EX01051517	3.0
-	TC01000001	JUC01000001	+	EX01051518	5.0
-	TC01000001	JUC01000002	+	EX01051516	3.0
-	TC01000001	JUC01000002	+	EX01051515	5.0
-	....
-	TC01000001	PSR01000002	+	EX01022607	
-	TC01000001	PSR01000002	+	EX01055113	
-	TC01000001	PSR01000004	+	EX01022608	
-	TC01000001	PSR01000004	+	EX01051517	
-\end{verbatim}	
-The "HTA-2\_0\_TranscriptAnnotations.txt" is:	
+$ python ExonAndTranscriptAnnotations.py HTA-2_0.na35.hg19.probeset
+    .csv HTA_2_0_ExonAndTranscriptAnnotations.txt
+\end{verbatim}
+\end{tcolorbox}
+\medskip
+The mapping between the probe sets and the junctions can be retrieved from the exon annotation. The function \texttt{JunctionAssociations.py} creates the corresponding mapping which can be given any name and a line indexing file ("LineIndexing\_JAnnot.txt").
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-	TC01000001	JUC01000001	+	EX01051517	TR01023991
-	TC01000001	JUC01000001	+	EX01051518	TR01023991
-	TC01000001	JUC01000002	+	EX01051516	TR01023992
-	TC01000001	JUC01000002	+	EX01051515	TR01023992
-	...
-	TC01000001	PSR01000002	+	EX01055113	TR01009585
-	TC01000001	PSR01000002	+	EX01022607	TR01021558
-	TC01000001	PSR01000002	+	EX01022607	TR01023991
-	TC01000001	PSR01000002	+	EX01022607	TR01015438
-	TC01000001	PSR01000002	+	EX01022607	TR01023992
-\end{verbatim}	
-The "HTA-2\_0\_JunAnnotations.txt" is:	
+$ python JunctionAnnotations.py HTA_2_0_ExonAndTranscriptAnnotations
+    .txt HTA_2_0_JunctionAnnotations.txt
+\end{verbatim}
+\end{tcolorbox}
+\medskip
+Alternatively, the mapping between the probe sets and junctions can be performed internally by the functions in the package as long as the annotation file is provided. Therefore, it is not a requirement to execute \texttt{JunctionAnnotations.py}.
+
+\item {\bf The Direct Ensembl Connection}\\ \\
+A direct Ensembl annotation can be achieved by making an remote connection with the Ensembl database while performing the REIDS function. The connection is established with the \texttt{biomaRt} package. The required information consist of the gene names for the transcript ID's and the probe set position. This can be found in the manufacturer's provided data files. The files are "HTA-2\_0.na35.2.hg19.transcript.csv" and "HTA-2\_0.na35.2.hg19.probeset.csv" for the Affymetrix microarrays.
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-	TC01000205	PSR01003404	JUC01001839	3
-	TC01000205	PSR01003405	JUC01001839	5
-	TC01000205	PSR01003405	JUC01001844	3
-	TC01000205	PSR01003407	JUC01001844	exclusion
-	TC01000205	PSR01003413	JUC01001829	3
-	TC01000205	PSR01003413	JUC01001833	3
-	TC01000205	PSR01003413	JUC01001835	3
-	TC01000205	PSR01003413	JUC01001840	3
-	TC01000205	PSR01003413	JUC01001842	3
-	TC01000205	PSR01003413	JUC01001843	3
-\end{verbatim}	
-The exon and transcript annotations can thus easily be replaced by, for example, Ensemble annotations.
-\subsection{Creating the .CDF file}
+> library(data.table) 
+> transcripts<-fread("HTA-2_0.na35.2.hg19.transcript.csv",
+    skip=19,header=TRUE,sep=",")
+> transcripts=as.data.frame(transcripts)
+> transcriptData=transcripts[,c(1,4,8)]
+> save(transcriptData,file="transcriptData.RData")
+
+> probesets <- fread("HTA-2_0.na35.hg19.probeset.csv",
+    skip=19,header=TRUE,sep=",") 
+> probesets =as.data.frame(probesets)
+> positionData <- probesets[probesets[,13] == "main",c(1,2,4,5,6,7)]
+> save(positionsData,file="positionsData.RData")
+\end{verbatim}
+\end{tcolorbox}
+\medskip
+The Ensembl information is retrieved based on the gene name. A mapping of the probe sets to exons is based on the positions of the probe sets. This allows to create the necessary annotations between probe sets, exons and isoforms. However, since no chromosome location is available for the junctions it is still necessary to perform \texttt{ExonAndTranscriptAnnotations.py} function in order to achieve a mapping between the probe sets and junctions. This output file can be passed to the internal REIDS functions and a mapping will be deduced from the manufacturer's exon annotations.
+
+\item {\bf The REMAP Annotations}\\ \\ 
+If the REMAP tool was executed, the remapping of probe sets and junctions can be used as input. In order to extract the REMAP information in the correct format the function \texttt{REMAP\_ExtractInfo.py} can be performed on the output files "GeneInfo.csv" and GeneAllInfo.csv". It will create a line indexing file ("REMAP\_Indices") as well as an output file with a user specified name containing the retrieved annotations. Further, if a transcript ID is annotated to multiple genes and the probe sets are divided across the genes a file "TC\_Gene\_SplitFile.txt" is created containing this information. The file can be used later on in the analysis to make a correct distinction between the genes. A mapping between the probe sets and the junctions will be retrieved later internally by the function.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+$ python REMAP_ExtractInfo.py REMAP/GeneAllInfo.txt REMAP/GeneInfo
+    .csv HTA_2_0_ExonAndTranscriptAnnotations.txt
+\end{verbatim}
+\end{tcolorbox}
+\end{itemize}
+Note that all functions were written to the example of the HTA-2.0 Affymetrix' annotation files. Therefore, for a different type of array of manufacturer it is recommended to study a small example to see if the information to be collected is at the same position in the lines. 
+\section{Creating the .CDF file}
 The .CDF file necessary to process the array with the R package aroma.affymetrix is created by combining the .clf en .pgf file of the Affymetrix library.
 Credit goes to the arome.affymetrix maintainers and writes of the necessary function which I bundle here.
 The following steps are required to create the .CDF file:
 \begin{enumerate}
 \item Combine the .pgf and .clf information with "combineProbeInfo.pl":
-	\begin{verbatim}
+	\medskip
+    \begin{tcolorbox}
+    \begin{verbatim}
 	$ perl combineProbeInfo HTA-2_0.r3
 	\end{verbatim}
+\end{tcolorbox}
+\medskip
 	The output consists of two files: "HTA-2\_0.r3.probeflat" and
 	"HTA-2\_0.r3.psr".
-
+  
 \item Run "ID\_Name\_TC.py" to combine probe set ID, probe set name and TC ID.
 This function retrieves information of "HTA-2\_0.na35.hg19.probeset.csv" and the
 "HTA-2\_0.r3.psr" file.
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
 	$ python ID_Name_TC.py
 	\end{verbatim}
+\end{tcolorbox}
+\medskip
 	The output is one file: "PSID\_Name\_TCID.txt".
 	
 \item Create an empty file .flat file and run "addGeneId\_2.pl" on the
 "HTA-2\_0.r3.probeflat" file and "PSID\_Name\_TCID.txt" with the empty file as
 third argument.
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
 	$ perl addGeneId_2 HTA-2_0.r3.probeflat PSID_Name_TCID.txt HTA-2_0.r3.flat
-	\end{verbatim}	
+\end{verbatim}
+\end{tcolorbox}
+\medskip
 	The output will be written to "HTA-2\_0.r3.flat".
 
 \item  Run "Flat2CDF.R" in R on the created outfile to obtain the .CDF file. The
@@ -186,390 +213,294 @@ output file is "HTA-2\_0,r3.cdf".
 (Note: I had to rename "HTA-2\_0,r3.cdf" to "HTA-2\_0,r.cdf" in order for
 aroma.affymetrix to recognize the .cdf file and process the .CEL files)
 
-\section{Preprocessing of the Data}
-The processing of the data starts from the raw .CEL files with functions of the
-\texttt{aroma.affymetrix} (\citealp{Bengtsson2008}) package. Whether you are
-working on a HPC or on your laptop, to be able to use this package, you have to
-make sure to have the correct folder structure. In the current working directory
+\section{Preprocessing}
+The preprocessing of the information uses functions of the \texttt{aroma.affymetrix} \citep{Bengtsson2008} package. In order to obtain data for the REIDS analysis the
+raw .CEL files are background corrected with the rma background correction and normalization is performed with the quantile normalization. The result is a data frame with a row for every individual probe. The first column contains the gene IDs and the second column the probe set IDs. All other columns contain the sample values of
+the probes. It is necessary to have the correct folder structure for the functions of \texttt{aroma.affymetrix}. In the current working directory
 two folders have to be set up. The first folder is a rawData folder. This folder
 contains another folder with the name of your data set. In our case this will be
-"TissueData". This "TissueData" folder should contain a last folder with as
-name the chipType used to produce the data (eg "HuEx-1\_0-st-v2") and herein the
-.CEL files should be placed. The second folder is the "annotationData" folder.
+"HTAData". This "HTAData" folder should contain a last folder with as
+name the chipType used to produce the data (eg "HTA-2\_0") and herein the
+.CEL files should be placed. The second folder in the working directory is the "annotationData" folder.
 Herein a folder with name "chipTypes" should be made which contains folders for
-each chip type with the respective names. In the folder of each chip type the
-corresponding .cdf file should be saved. Figure \ref{DataProcessing_Folders}
+each chip type with the corresponding names. In the folder of each chip type the .cdf file should be saved. Figure \ref{DataProcessing_Folders}
 shows the structure of the directories with as working directory a folder named
-"REIDS".
+"REIDS\_Preprocessing".
 \begin{figure}[h!]
 \centering
-\includegraphics[width=5cm,height=4cm]{DataProcessing_Folders.png} 
-\caption{\em{Folder Structure for the \texttt{aroma.affymetrix} package}}
+\includegraphics[width=4.5cm,height=3cm]{FolderStructure.png} 
+\caption{The folder structure for the \texttt{aroma.affymetrix} package.}
 \label{DataProcessing_Folders}
 \end{figure}
-\noindent An R script can now be created in the current working directory such
-that the functions have acces to the created folders. The function used to
-perform the data processing is \texttt{DataProcessing} and is a wrapper of
-several functions of the \texttt{aroma.affymetrix} package which is imported by
-the \texttt{REIDS} package. In order to obtain the data to perform the REIDS model on, the
-raw .CEL files are background corrected with the rma background correction and
-normalization is performed with the quantile normalization. The data is returned
-as a data frame with one line per probe. There are thus multiple lines per
-probeset (one for each probe of the probeset). \\ \\
-The first colum contains the gene IDs and the second column the probe set IDs.
-All other columns contain the sample values of
-the probes. If requested, also a gene and exon level summarization is performed
-on the data with the rma summarization method. Further, the option is
-provided to perform the FIRMA model (\citealp{purdom2008}) on the data as well.
-For an  data the function specified in a regular R script is as
-follows:
-<<DataProcessing,eval=FALSE>>=
-library(REIDS)
-DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
-		ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,
-		location="HTAData",verbose=TRUE)
-@
+\noindent An R script can now be created in the "REIDS\_Preprocessing" directory such
+that the functions have access to the created folders. The function used to
+perform the data processing is \texttt{DataProcessing.R} and is a wrapper of
+several functions of the \texttt{aroma.affymetrix} package.
+If requested, also gene and exon level summarization is performed
+with the rma summarization method. Further, the option is
+available to compute the FIRMA \citep{purdom2008} values as well.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> library(REIDS)
+> DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
+    ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=FALSE,
+    location="PreProcessed_HTAData",verbose=TRUE)
+\end{verbatim}
+\end{tcolorbox}
+\medskip
 \noindent The tags parameter refers to a tag that was added to the .cdf file.
-Make sure to have created a folder named "HTAData" in your working directory
-for the results to be saved. This is the loctaion in the function above. The
-function as formulated above will create four data frames. One with the
-backgouncorrected and normalized probe intensities, one with the gene level
-summarized values, one with the exon level summarized values and a last one with
-the values of the FIRMA model. If one has a HPC available, we can call upon the
-previous function via the DataProcessing.R and DataProcessing.pbs scripts
-available in the doc folder. Be carefull to fill in the requirements
-for your specific project. After completing the .pbs file, a qsub command on
-this batch file should get the function running.\\ \\
-If you do not have access to a HPC service, the next processing steps can be
-skipped and the data is a proper format for the REIDS model implemented in the
-\texttt{REIDSFunction} function. If you do have access to an HPC service and you
-wish to use it, some more processing of the data is necessary. The strength of
-using the HPC server is that calculations can be parallelized. In our case where
-we run the REIDS model gene-by-gene, the server needs a file in which every line
-correspond to one gene and contains all the information of that gene. This way
-the cluster can read several lines, etc several genes simultaneously and
-distribute them over multiple cores who perform the calculations independently.
-First, a pivot transformation will be conducted to convert the data into a file
+Make sure to have created a folder named "PreProcessed\_HTAData" in your working directory
+for the results to be saved.\\ \\
+In order to avoid the loading of the entire data frame and taking up a substantial amount of memory we
+create a file in which every line corresponds to one gene and contains all the information of that gene. The creation of the accompanying indexing file will avoid the loading of the entire data frame and allows to process several genes simultaneously by distributing these over multiple cores (eg on a HPC server). This is performed by the function \texttt{PivotTransformation.R}. First, a pivot transformation will be performed in order to convert the data into a file
 with one line per gene. All information concerning one gene is thus gathered
 into this line. The first column of the returned file contains
 the gene ID, the second column contains the exon IDs of all the exons of that
 gene. The third colum indicates the number of probes per exon, the fourth
 contains the values of those probes per sample and the last column contains the
-sample names. 
-<<PivotTransformation,eval=FALSE>>=
-load("HTAData.RData")
-
-PivotTransformData(Data=HTAData,GeneID=HTAData$GeneID,ExonID=HTAData$ExonID,
-		savecsv=FALSE,Name="HTAData_Pivot",location="HTAData")
-
-GeneID=unique(as.character(HTAData$GeneID))
-GeneTable=data.frame("GeneID"=GeneID)
-save(GeneTable,file="GeneTable.RData")
-@			 
+sample names. If a REMAP "TC\_Gene\_SplitFile.txt" is available, it can be used in order to make a correct distinction between genes.
+A table with the suffix "GeneTable" is also created which contains the gene ID's. The table is used in a later stage.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> data(TC1500264)
+> PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,REMAPSplitFile=
+    "TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+\end{verbatim}
+\end{tcolorbox}	 
+\medskip
 \noindent A final file is created with
-the begin positions and lengths of the lines of the previous file. The function
-for this indexing of the lines is not an \texttt{R} function but a
-\texttt{python} function. The doc folder contains the \texttt{Line\_Indexer.py} function
-and its corresponding .pbs file. The last line is where the function is
-called.
+the begin positions and lengths of the lines of the previous file with the help of \texttt{Line\_Indexer\_Pivot.py}.
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-python Line_Indexer_Pivot.py --output_file HTAData_LineIndex.csv HTAData_Pivot.csv
-\end{verbatim} 
-After output\_file the first name is the name to be given to the transformed
-file. The second file is the file to be transformed. Make sure that the function
-is run in the same folder where the file to be transformed is saved.  The HPC
-server will now work from these begin positions, read a line from the first file
-and process the corresponding gene with the REIDS model. The second file is not
-necessary for the calculations of the HPC server but it makes life easier for
-the server as it does not need to read in all the information on all the
-genes.\\ \\
-Finally, we compute the DABG p-values with APT.
+$ python Line_Indexer_Pivot.py --output_file HTAData_LineIndex.csv 
+    HTAData_Pivot.csv
+\end{verbatim}
+\end{tcolorbox}	
+\medskip
+\noindent After output\_file the first name is the name to be given to the line
+indexing file. The second file is the file to be transformed. Make sure that the function
+is run in the same folder where the file to be transformed is saved.  The REIDS function
+will now work from these begin positions, read a line from the pivot transformed file
+and process the corresponding gene with the REIDS model.\\ \\
+Finally, we compute the DABG \citep{Affymetrix2007} p-values with Affymetrix Power Tool (APT)
+which is to be installed separately.
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-apt-probeset-summarize -a dabg -p HTA-2_0.r3.pgf -c HTA-2_0.r3.clf -b 
-HTA-2_0.r3.antigenomic.bgp-o ./APT_DABG Path/To/Folder/*.CEL"
+$ apt-probeset-summarize -a dabg -p HTA-2_0.r3.pgf -c HTA-2_0.r3.clf -b 
+    HTA-2_0.r3.antigenomic.bgp-o ./APT_DABG Path/To/Folder/*.CEL
 \end{verbatim} 
-The file "PSID\_Name\_TCID.txt" was created during the making of the .CDF file
-and contains a probe set ID, the probe set name and the corresponding TC
-ID in each line.
-<<DABGProbesets,eval=FALSE>>=
-ProbesetID_ProbesetName=read.table("PSID_Name_TCID.txt")
-DABG=read.table("APT_DABG/dabg.summary.txt",header=TRUE,sep="\t")
+\end{tcolorbox}	
+\medskip
+\noindent In order to connect the information of the DABG analysis to our REIDS
+model a mapping file between the probe set ID, probe set name and transcript ID is necessary.
+The python script \texttt{ID\_Name\_TC.py} reads information from the "HTA-2\_0.na35.hg19.probeset.csv" and "HTA-2\_0.r3.psr" files and creates an output file with the required information.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+$ python ID_Name_TC.py HTA-2_0.na35.hg19.probeset.csv HTA-2_0.r3.psr 
+    PSID_Name_TCID.txt
+\end{verbatim} 
+\end{tcolorbox}	
+\medskip
+\noindent The mapping between the probe set ID's and probe set names can be
+linked to the DABG analysis.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> ProbesetID_ProbesetName=read.table("PSID_Name_TCID.txt")
+> DABG=read.table("APT_DABG/dabg.summary.txt",header=TRUE,sep="\t")
 
-#DABG in all samples
-Low=apply(DABG,1,function(x) all(x>=0.05))
-LowUIDs=DABG[,1][Low]
-LOW_Probesets_All=unique(ProbesetID_ProbesetName[which(
-ProbesetID_ProbesetName[,1]%in%LOWUIDs),2])
-save(LOW_Probesets_All,file="Low_AllSamples.RData")
+> #DABG in all samples
+> Low=apply(DABG,1,function(x) all(x>=0.05))
+> LowUIDs=DABG[,1][Low]
+> LOW_Probesets_All=unique(ProbesetID_ProbesetName[which(
+> ProbesetID_ProbesetName[,1]%in%LOWUIDs),2])
+> save(LOW_Probesets_All,file="Low_AllSamples.RData")
 
-#Per Group
-Low_GSamples=list()
-for(g in 1:length(Groups)){
-	Low=apply(DABG,1,function(x) all(x[Groups[[g]]]>=0.05))
-	LowUIDs=DABG[,1][Low]
-	LOW_Probesets_Samples=unique(ProbesetID_ProbesetName[which(
-	ProbesetID_ProbesetName[,1]%in%LOWUIDs),2])
-	Low_GSamples[[g]]=LOW_Probesets_Samples
-}
-save(Low_GSamples,file="Low_GSamples.RData")
-@
-After this final function, the data is ready to be used for the REIDS model.
+> #Per Group
+> Low_GSamples=list()
+> for(g in 1:length(Groups)){
+    Low=apply(DABG,1,function(x) all(x[Groups[[g]]]>=0.05))
+    LowUIDs=DABG[,1][Low]
+    LOW_Probesets_Samples=unique(ProbesetID_ProbesetName[which(
+    ProbesetID_ProbesetName[,1]%in%LOWUIDs),2])
+    Low_GSamples[[g]]=LOW_Probesets_Samples
+ }
+> save(Low_GSamples,file="Low_GSamples.RData")
+\end{verbatim}
+\end{tcolorbox}	
+\medskip
+\noindent After this final function, the data is ready for the REIDS model.
+
 \section{The REIDS Model}
-The data is now in an adequate format for the REIDS model. If you do not have
-acces to an HPC service, the \texttt{REIDSFunction} function can be performed on
-the data frame returned by the \texttt{DataProcessing} function.
-The \texttt{REIDSFunction} function consists of two subfunctions. The first is
-the \texttt{iniREIDS} which filters out non-informative probesets with the I/NI calls model
-(\citealp{kasim2010}). The option is available whether the filtering should be
-performed or not. The second function is the \texttt{REIDSmodel\_intern}
-and performs the actual REIDS model, possibly on the output of
-\texttt{iniREIDS}.
-A list with one element per gene is returned. Per gene, there is list with three
-elements if \texttt{iniREIDS} is performed. Otherwise, two elements are
-available per gene. The optional element per gene is a data frame with the exons and a
-logical value indicating whether the exon is informative or not with
-\texttt{TRUE} or \texttt{FALSE} respectively. The other two elements contain the
-exon scores and the array scores of the exons. The function is:
-<<REIDS,eval=FALSE>>=
-load("GeneTable.RData")
-load("Low_AllSamples.RData")
+The data is now in an adequate format for the REIDS model. The \texttt{REIDSFunction.R} function consists of two subfunctions. The first is
+the \texttt{iniREIDS.R} which filters out non-informative probe sets with the I/NI calls model
+\citep{Kasim2010}. The option is available whether the filtering should be
+performed or not. The second function is the \texttt{REIDSmodel\_intern.R}
+and performs the actual REIDS model. The minimal returned elements are the exon scores and array scores of the probe sets
+Optional elements are the outcome of the I/NI calls, summarized gene level values and summarized exon level values. Each element is written to a
+corresponding .txt file. We illustrate the function for a single gene.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> load("Low_AllSamples.RData")
 
+> REIDSFunction(ASPSR=c(),Indices="Output/
+    TC1500264_LineIndex.csv",DataFile="Output/TC1500264_Pivot.csv",
+    nsim=5000,informativeCalls=FALSE,Summarize=c("WeightedAll","EqualAll"),
+    rho=0.5,Low_AllSamples=Low_AllSamples,Groups=list(c(1:3),c(4:6)),
+    Location="Output",Name="TC1500264")
 
-REIDSFunction(geneIDs=GeneTable,Name="HTA-2.0", Indices="HTAData_lineindex.csv",
-		DataFile="HTAData_Pivot.csv",nsim=5000,informativeCalls=FALSE,
-		rho=0.5,Low_AllSamples=Low_AllSamples,Location="Output")
-
-
-@
-\noindent The non-cluster version of the REIDS model is recommended to be used
-only on a small data set or a subset of a larger one. The
-\texttt{REIDSFunction\_ClusterVersion} is an adaption of the REIDS model to be used
-on a HPC server. The cluster will parallelize the computations. This implies
-that several genes will be processed simultaneously. The process starts by reading
-a line of the file created by the python function \texttt{Line\_Indexer}.
-This contains a begin position and length of that line of the  file made by
-\texttt{PivotTransfornmation}. Next, the corresponing line will be looked for
-and read into the script. This line enholds all the information of one gene and
-with some processing, a small data frame of this gene is produced. This subset
-is then processed by the \texttt{REIDSFunction\_ClusterVersion} function. For each
-processed gene a .RData file will be saved with the output of the REIDS model. We will
-combine these later. The entire procedure is coded in the
-REIDSFunction\_ClusterVersion.R file in the doc folder of this pacakge. A corresponding .pbs file is also available. By submitting the file of the
-\texttt{Line\_Indexer} function as the data and the
-REIDSFunction\_ClusterVersion.pbs file as a batch file to a worker framework on
-the HPC server the function should be executed. The computation time depends
-from data set to data set. For the tissue data, 24 hours should be adequate.
-The long computational time is due a just a few genes that have a large number
-of exons. After 24 hours, five gene were not returned and therefore
-left out of the analysis.\\ \\
-Finally, the indiviudal gene outcomes of the
-\texttt{REIDSFunction\_ClusterVersion} should be binded together into one larger
-data set. This is done by the \texttt{CreateOutput} function. It is necessary to
-provide a file of the gene IDs of which the outcomes were produced. The doc
-folder contains this file for the tissue data. The function will read the 
-gene ID, look for the corresponding file of the REIDS model and add it to a list.
-Eventually it will return a list with one element per gene. The function can be
-run on the HPC service with the CreateOutput.R and CreateOutput.pbs files in the doc
-folder. A qsub command on the .pbs file gets the function started.
-
-\section{Analysis}
-If you are interested in the results of a particular gene and/or exon the
-\texttt{Search} function allows you to get that specific data out of the output.
-Given exon IDs, it is capable of retrieving the corresponding gene IDs as well
-in case the gene ID is not known beforehand. The function can be run on the REIDS
-ouput but also on more analyzed data frames as for example after performing a
-test between the samples.
-<<Search,eval=FALSE>>=
-exonID <- c("PSR01003414","PSR02012920","PSR12000150")
-
-load("HTA-2.0_REIDS_Output.RData")
-
-Results=Search(WhatToLookFor=data.frame(ExonID=exonID),Data=REIDS_Output, 
-               AggregateResults=FALSE,NotFound=NULL)
-@
-\noindent In order to identify exons that are alternatively spliced, their exon
+\end{verbatim}
+\end{tcolorbox}	
+\medskip
+\noindent The non-HPC version of the REIDS model is recommended to be used
+only on a small data set. The \texttt{REIDSFunction\_HPCVersion} is an adaptation of the REIDS model for use
+on a HPC server.\\ \\ 
+In order to identify exons that are alternatively spliced, their exon
 scores and array scores should be investigated. The array scores can be
-tested between groups of interest of the samples. If the data consists of paired
+tested between the groups of interest. If the data consists of paired
 samples, the mean paired differences can be investigated. We have written a
-function \texttt{ASExons} that performs a simple t-test or F-test on the
-array scores. The p-values are adjusted for multiplicty. The function has the option to already
-filter out probesets that do not pass the exon score threshold and only consider
-those that do. If also a significance level is specified, non-significant
-p-values will be left out of the results. A data frame with one line per exon is
+function \texttt{ASExons.R} that performs a simple t-test or F-test on the
+array scores. The p-values are adjusted for multiplicity across all genes. The function has the option to already
+filter out probe sets that do not pass the exon score threshold. If also a significance level is specified, non-significant
+p-values will be left out of the results. A data frame with a line per probe set is
 returned. The columns contain the gene ID, the exon ID, the test statistic, a
 p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given.
-<<ExonTesting,eval=FALSE>>=
-load("HTA-2.0_REIDS_Output.RData")
-
-HTAData_1vs2=ASExons(Data=HTA-2.0,REIDS_Output,Exonthreshold=0.5,
-		Groups=list(c(10:18),c(19:27)),paired=FALSE,
-		significancelevel=0.05)
-
-save(HTAData_1vs2,file="HTAData_1vs2.RData")
-@
-\noindent Corresponding files for use on the HPC server are also here available
-in the doc folder.\\ \\
-We now add the junction information to discover more on the
-transcript composition.
-<<HTAJUN,eval=FALSE>>=
-load("HTAData_1vs2.RData")
-load("HTAData.RData")
-load("Low_GSamples.RData")
-load("Low_AllSamples.RData")
-for(i in 3:ncol(HTAData)){
-	HTAData[,i]=as.numeric(as.character(HTAData[,i]))
-}
-
-ASPSR_PSR=HTAData_1vs2[HTAData_1vs2$adj.p.value<0.05,]
-length(unique(ASPSR_PSR$ExonID))
-
-#ExonAnnotations
-EI=read.table("LineIndexing_ExonAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-#JunctionAnnotations
-JI=read.table("LineIndexing_JAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-#Transcript Annotations
-TrI=read.table("LineIndexing_TrAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-
-REIDS_JunctionAssesment(ASProbeSets=unique(ASPSR_PSR$ExonID),
-		JAnnotI=JI,EAnnotI=EI,TrAnnotI=TrI,Data=HTAData,Groups=list(c(3,4,5),
-		c(6,7,8)),Low_AllSamples,Low_GSamples,Plot=FALSE,Name="HTA-2.0")
-	
-@
-The output file is .txt file with the following structure:
+\medskip
+\begin{tcolorbox}
 \begin{verbatim}
-TC05001924	PSR05026575	Const	-	-	-	-	-	-0.24	EX05012493	-
-TC06001355	PSR06016183	AS	-	-	-	-	REIDS	0.60	EX06004488 Alternative First'
-TC06001355	PSR06016180	AS	-	JUC06008083	-	JUC06008083	REIDS	-2.134	EX06024125	Alternative 3'
-TC06001355	PSR06016179	AS	-	JUC06008083	-	JUC06008083	REIDS	-2.30	EX06024124	Alternative Last
-TC06001387	PSR06016269	Const	-	-	-	-	-	0.30	EX06011670	-
-TC06001387	PSR06016268	Const	JUC06008109	-	-	-	-	0.25EX06017092	-
-TC06001387	PSR06016266	AS	JUC06008109	-	-	-	REIDS	-1.25	EX06026585	Alternative Last
+> TC1500264_1vs2=ASExons(ExonScores="Output/TC1500264_ExonScores.txt",
+> ArrayScores="Output/TC1500264_ArrayScores.txt",Exonthreshold=0.5,
+> Groups=list(c(1:3),c(4:6)),paired=FALSE,significancelevel=0.05)
+> save(TC1500264_1vs2,file="TC1500264_1vs2.RData")
 \end{verbatim}
-Alternatively spliced exons can be selected from the file. Further, information
-regarding the junctions, AS type, fold change and exon annotation is available
-as well.\\ \\
-Information of the probe sets can be visualized by the means of plots.
-ExpressionLevelPlot.R plots a specific probe set with its probe set intensities,
-summarized exon level and gene level values. 
-<<PlotFunction1,eval=FALSE>>=
-load("HTAData.RData")
-load("ExonLevel.RData")
-load("GeneLevel.RData")
-ExpressionLevelPlot(GeneID="TC12000010",ExonID="PSR12000150",Data=HTAData,
-		GeneLevelData=GeneLevel,ExonLevelData=ExonLevel,groups=
-		list(c(1:3),c(4:6)),ylabel="",title="PSR12000150")	
+\end{tcolorbox}	
+\medskip
+\noindent We now add the junction information to discover more on the
+transcript composition and the possible AS events. The \texttt{REIDS\_JunctionAssesment.R} returns four files. The first file has name "Name\_ASInfo.txt" and contains a line per probe set. It shows the reached decision regarding the probe set (Const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second file, "Name\_Compositions.txt", is a list of all found transcripts for a particular transcript ID. The third file,"Name\_GroupTranscripts.txt" indicates whether a specific transcript is present or absent in a group. The fourth file "Name\_NovelConnections.txt" contains junctions which are showing an undocumented connection between probe sets.
+A last file, "Name\_NotAssessedTranscripts.txt", contains transcript of which the isoform information was not available or could not be processed. The "Name\_ASInfo.txt" contains information regarding the AS events. \\ \\
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> load("TC1500264_1vs2.RData")
+> load("Low_GSamples.RData")
+> load("Low_AllSamples.RData")
 
-@
+> ASPSR_PSR=unique(TC1500264_1vs2[,2])
+> length(unique(ASPSR_PSR))
+
+> REIDS_JunctionAssesment(Indices="Output/TC1500264_LineIndex.csv",
+    DataFile="Output/TC1500264_Pivot.csv",ASProbeSets=ASPSR_PSR, 
+    EandTrAnnotI="Output/REMAP_Indices.txt",EandTrAnnot="Output/
+    HJAY_REMAP.txt",Groups=list(c(1:3),c(4:6)),Low_AllSamples=,
+    Low_AllSamples,Low_GSamples=Low_GSamples,Location="Output",
+    Name="TC1500264")
+\end{verbatim}
+\end{tcolorbox}
+\medskip
+\noindent The \texttt{REIDS\_IsoformAssesment.R} is an experimental function to
+analyze the isoform information based on the exon level values and the isoform composition. The function returns three files. The first file has name "Name\_IsoformIndication.txt" and contains an assessment of the relative expression levels of the isoforms. A second file,"Name\_ExonTesting.txt", shows information regarding the differential expression of exon. A final file,"Name\_PossibelDEIsoforms" lists isoforms which might be differentially expressed between the groups.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> REIDS_IsoformAssesment(geneIDs=GeneTable,IsoformInfo="Output/
+    TC1500264_Compositions.txt",ExonLevel="Output/TC1500264_ExonLevel.txt",
+    Groups=list(c(1:3),c(4:6)),Location="Output",Name="TC1500264")
+\end{verbatim}
+\end{tcolorbox}
+\medskip
+\noindent Finally, it is possible to perform the REIDS method, AS detection and
+summarization in one function. The function \texttt{REIDAnalysis.R} is a wrapper function of the previously introduced functions. The REIDS model will be performed with,if specified, summarization based on all probe sets, followed by an AS identification step and, if specified, a summarization on the constituitive probe sets. If annotation and junction information is available, a junction and isoform assessment will be performed.
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> data(TC1500264)
+> PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+    REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location=
+    "Output",Name="TC1500264_Pivot")
+
+> load("Low_GSamples.RData")
+> load("Low_AllSamples.RData")
+
+> REIDS_Analysis(Indices="Output/TC1500264_LineIndex
+    .csv",DataFile="OutputTC1500264_Pivot.csv",nsim=100,Summarize=c(
+    "WeightedAll","EqualAll","WeightedConst","EqualConst"),rho=0.5,
+    Exonthreshold=0.5,significancelevel=0.05,Groups=Groups,paired=FALSE,
+    Low_AllSamples=Low_AllSamples,Low_GSamples=Low_GSamples,EandTrAnnotI
+    ="Output/REMAP_Indices.txt",EandTrAnnot="Output/HJAY_REMAP.txt",
+    Location="Output",Name="TC1500264")
+\end{verbatim}
+\end{tcolorbox}
 \newpage
+\section{Visualization}		
+Information of the probe sets can be visualized by the means of plots.
+\texttt{ExpressionLevelPlot.R} plots a specific probe set with its probe set intensities,
+summarized exon level and gene level values. 
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> load("HTAData.RData")
+> load("ExonLevel.RData")
+> load("GeneLevel.RData")
+> ExpressionLevelPlot(GeneID="TC12000010",ExonID="PSR12000150",
+    Data=HTAData,GeneLevelData=GeneLevel,ExonLevelData=ExonLevel,
+    groups=list(c(1:3),c(4:6)),ylabel="",title="PSR12000150")	
+\end{verbatim}
+\end{tcolorbox}	
 \begin{figure}[h!]
 \centering
 \includegraphics[width=10cm,height=10cm]{Package_1.pdf} 
-\caption{\em{The observed probe intensities of PSR12000150relative to the summarized gene level values of TC12000010. 
+\caption{The observed probe intensities of PSR12000150 relative to the summarized gene level values of TC12000010. 
 The black and blue lines indicate the mean profiles of the gene and exon level data respectively. 
-The blue points show the probe level data.}}
+The blue points show the probe level data.}
 \label{Figure3}
 \end{figure}
-\noindent Transcript isoform composition can be retrieved with
-TranscriptsPlot.R.
-We show the composition of "TC12000010" and highlight PSR12000150. Note the subfix of
-".hg.1 after the probe set name. The addition is necessary since this is the
-full probe set name in the Affymetrix based positions and transcriptinfo files.
-<<PlotFunction2,eval=FALSE>>=
-load("HTAData.RData")
-load("ExonLevel.RData")
+\noindent Transcript isoform composition can be retrieved with \texttt{TranscriptsPlot.R}.
+We show the composition of "TC12000010" and highlight PSR12000150. 
+\medskip
+\begin{tcolorbox}
+\begin{verbatim}
+> load("HTAData.RData")
+> ExonLevel=read.table("Output_ExonLevel.txt",header=TRUE,sep="\t")
 
-library(data.table) 
-transcript.clusters.NetAffx.36<-fread("HTA-2_0.na35.2.hg19.transcript.csv",
-		skip=19,header=TRUE,sep=",")
-transcript.clusters.NetAffx.36=as.data.frame(transcript.clusters.NetAffx.36)
-transcript.clusters.NetAffx.36=transcript.clusters.NetAffx.36[,c(1,4,8)]
-save(transcript.clusters.NetAffx.36,file="transcript.clusters.NetAffx.36.RData")
-#load("transcript.clusters.NetAffx.36.RData")
+> library(data.table) 
+> transcripts<-fread("HTA-2_0.na35.2.hg19.transcript.csv",skip=19,
+    header=TRUE,sep=",")
+> transcripts=as.data.frame(transcripts)
+> transcriptData=transcripts[,c(1,4,8)]
 
-probesets.NetAffx.36 <- fread("HTA-2_0.na35.hg19.probeset.csv",
-		skip=19,header=TRUE,sep=",") 
-probesets.NetAffx.36 =as.data.frame(probesets.NetAffx.36)
-positions_36 <- probesets.NetAffx.36[probesets.NetAffx.36[,13] == "main",c(1,2,4,5,6,7)]
-save(positions_36,file="positions_36.RData")
-#load("positions_36.RData")
+> probesets <- fread("HTA-2_0.na35.hg19.probeset.csv",skip=19,
+    header=TRUE,sep=",") 
+> probesets=as.data.frame(probesets)
+> positionData <- probesets[probesets[,13] == "main",c(1,2,4,5,6,7)]
 
+> TranscriptsPlot(trans="TC12000010", positions=positionData,
+    transcriptinfo=transcriptData,display.probesets=TRUE,
+    Data=ExonLevel,groups=list(c(1:3),c(4:6)),Start=NULL,
+    Stop=NULL,Highlight="PSR12000150")	
+\end{verbatim}
+\end{tcolorbox}	
 
-TranscriptsPlot(trans="TC12000010", positions=positions_36,
-		transcriptinfo=transcript.clusters.NetAffx.36,
-		display.probesets=TRUE,Data=ExonLevel,groups=list(c(1:3),c(4:6)),
-		Start=NULL,Stop=NULL,Highlight="PSR12000150")	
-
-@
-\newpage
 \begin{figure}[h!]
 \centering
 \includegraphics[width=18cm,height=10cm]{Transcripts_PSR150.pdf} 
-\caption{\em{The isoform composition of transcript cluster TC12000010 (WNK1).
+\caption{The isoform composition of transcript cluster TC12000010 (WNK1).
 Probe set PSR12000150 is highlighted as an alternative last event exon. 
 The red lines represent the probe set expression levels of the SCR samples. The
-blue lines show the probe set expression levels for the siRNA samples.}}
+blue lines show the probe set expression levels for the siRNA samples.}
 \label{Figure2}
 \end{figure}
 
-\noindent The linking of the probe sets can be visualized with arcdiagrams. The
-code is retrieved from the R package arcdiagrams available via GitHub
-(https://github.com/gastonstat/arcdiagram). The plot for this function can 
-be produced with the internal function of the REIDS\_JunctionAssesment.R 
-function with the Plot parameter set to TRUE: the
-JunInfo function.
-
-<<PlotFunction3,eval=FALSE>>=
-load("Data/HTAData_1vs2.RData")
-load("Data/HTAData.RData")
-load("Low_GSamples.RData")
-load("Low_AllSamples.RData")
-for(i in 3:ncol(HTAData_RASA)){
-	HTAData_RASA[,i]=as.numeric(as.character(HTAData_RASA[,i]))
-}
-
-ExonScoreFilter=HTAData_LiverVSMuscle[HTAData_LiverVSMuscle$X50.>=0.50,]
-
-ASPSR_PSR=ExonScoreFilter[ExonScoreFilter$adj.p.value<0.05,]
-length(unique(ASPSR_PSR$ExonID))
-
-#ExonAnnotations
-EI=read.table("LineIndexing_ExonAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-#JunctionAnnotations
-JI=read.table("LineIndexing_JAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-#Transcript Annotations
-TrI=read.table("LineIndexing_TrAnnot.txt",header=FALSE,sep="\t",
-		stringsAsFactors=FALSE)
-
-JunInfo(x="TC12000010",ASPSR=unique(ASPSR_PSR$ExonID),JLines=JI[which(JI[,1]==x),],
-		TrLines=TrI[which(TrI[,1]==x),],ELines=I[which(EI[,1]==x),],
-		DataS=HTADataData[which(as.character(HTAData[,1])==x),],
-		Groups=list(c(1:3),c(4:6)),Low_ALLSamples=Low_ALLSamples,Low_GSamples=Low_GSamples,Plot=TRUE)
-@
-\begin{figure}[h!]
-\centering
-\includegraphics[scale=0.20]{Figure11.jpg} 
-\caption{\em{Illustration of transcript cluster TC12000010 (WNK1). Black probe sets were identified as 
-constituitive while coloured probe sets were identified as alternatively spliced. Green colour 
-indicates an enrichment of a probe set while red colour denotes a depletion. Junctions which are
-DABG are shown in blue while depleted junctions are again shown in red. Panel (a) shows the 
-probe sets for the SCR samples and panel (b) for the siRNA samples.}}
-\label{Figure3}
-\end{figure}
-
-\bibliographystyle{asa}
-\bibliography{Biblio}
+\newpage
 \section{Software used}
 <<sessionInfo, echo=FALSE, results=tex>>=
 toLatex(sessionInfo())
 @
+\bibliographystyle{asa}
+\bibliography{REIDS_Biblio}
 \end{document}

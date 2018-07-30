@@ -43,6 +43,23 @@ NULL
 #' data(TC12000010)
 NULL
 
+#' Example data set
+#' 
+#' An example data set containing the expression values of the probe sets of transcript cluster TC1500264.
+#' 
+#' @name TC1500264
+#' 
+#' @docType data
+#'
+#' @usage data(TC1500264)
+#'
+#' @format An object of class \code{"data.frame"}.
+#'
+#' @keywords datasets
+#' @examples
+#' data(TC1500264)
+NULL
+
 #' Example data set for FIRMA
 #' 
 #' An example data set for the FIRMA functions

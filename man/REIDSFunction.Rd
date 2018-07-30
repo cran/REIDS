@@ -4,31 +4,48 @@
 \alias{REIDSFunction}
 \title{"REIDSFunction"}
 \usage{
-REIDSFunction(geneIDs, Name, Indices, DataFile, nsim = 5000,
-  informativeCalls = TRUE, rho = 0.5, Low_AllSamples, Location)
+REIDSFunction(ASPSR = c(), Indices, DataFile, nsim = 1000,
+  informativeCalls = TRUE, Summarize = FALSE, rho = 0.5,
+  Low_AllSamples = c(), Groups, Location = NULL, Name = "REIDS")
 }
 \arguments{
-\item{geneIDs}{A data frame with a "geneID" column.}
+\item{ASPSR}{A vector with alternatively spliced probe sets which are taken out of the analysis and summarization. This is useful if Summarize is "WeightedConst" and/or "EqualConst".}
 
-\item{Name}{A name for the returned list.}
-
-\item{Indices}{The .csv file created by Line_Indexer.py which contains indices for every gene.}
+\item{Indices}{The .csv file created by Line_Indexer.py which contains indices for every gene in geneIDs.}
 
 \item{DataFile}{The .csv file created by PivotTransformation.}
 
-\item{nsim}{The number of iterations to perform.}
+\item{nsim}{The number of iterations to perform. Defaults to 1000.}
 
 \item{informativeCalls}{Logical. Should the I/NI calls method be perform before applying the REIDS model?}
+
+\item{Summarize}{A character vector specifying wich summarization method is to be performed. The choices are "EqualAll", "WeightedAll", "EqualConst" and "WeightedConst". The former two use all probe sets while the latter use only the constituitive probe sets. Summarization on the constistuitive probe sets will only be performed if ASPSR is specified.}
 
 \item{rho}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.}
 
 \item{Low_AllSamples}{A character vector containing the probe sets which are not DABG in all samples.}
 
+\item{Groups}{A list with elements specifying the columns of the data in each group.}
+
 \item{Location}{A character string indication the place where the outputs are saved.}
+
+\item{Name}{A name for the output to be saved at Location. Defaults to "REIDS".}
 }
 \value{
-A list with an element for each gene with per gene the values returned by the iniREIDS and REIDS functions.
+The functions writes the obtained information to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt".
 }
 \description{
 The REIDSFunction performs the REIDS model on the pivot transformed data by calling on the line indexed file. The REIDS model is performed gene by gene and the returned outputs are knitted together.
+}
+\examples{
+\dontrun{
+data(TC1500264)
+PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+
+REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,
+Summarize=c("WeightedAll","EqualAll"),
+rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),Location="Output",Name="TC1500264")
+}
 }

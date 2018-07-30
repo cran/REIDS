@@ -4,13 +4,15 @@
 \alias{ExonTesting}
 \title{"ExonTesting"}
 \usage{
-ExonTesting(Data, Exonthreshold = NULL, Groups = list(), paired = FALSE,
-  significancelevel = NULL)
+ExonTesting(ExonScores, ArrayScores, Exonthreshold = NULL, Groups = list(),
+  paired = FALSE, significancelevel = NULL)
 }
 \arguments{
-\item{Data}{The Data on which testing of the array scores should be conducted. This is preferably output of the REIDS function}
+\item{ExonScores}{The path to the file with the exon scores of the probe sets.}
 
-\item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
+\item{ArrayScores}{The path to the file with the array scores of the probe sets.}
+
+\item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probe sets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
 
 \item{Groups}{A list with elements specifying the columns of the data in each group.}
 
@@ -19,13 +21,8 @@ ExonTesting(Data, Exonthreshold = NULL, Groups = list(), paired = FALSE,
 \item{significancelevel}{The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.}
 }
 \value{
-A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
+A data frame with one line per exon. The columns contain the gene ID, the exon ID, the exon score, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
 }
 \description{
-The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
-}
-\examples{
-data(TC12000010_REIDS_Output)
-ExonTest=ExonTesting(Data=TC12000010_REIDS_Output,Exonthreshold=NULL,Groups=list(c(1:9),c(10:18)),
-paired=FALSE,significancelevel=NULL)
+The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) between the array scores of predefined groups. If specified, probe sets are filtered out on exon scores and significance level. The function is the internal function of ASExons.
 }

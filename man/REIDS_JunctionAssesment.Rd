@@ -4,20 +4,35 @@
 \alias{REIDS_JunctionAssesment}
 \title{REIDS_JunctionAssessment}
 \usage{
-REIDS_JunctionAssesment(ASProbeSets = c(), JAnnotI, EAnnotI, TrAnnotI, Data,
-  Groups = list(c(3, 4, 5), c(6, 7, 8)), Low_AllSamples = c(),
-  Low_GSamples = c(), Name)
+REIDS_JunctionAssesment(Indices, DataFile, ASProbeSets = c(),
+  Juninfo = "User", JAnnotI = NULL, JAnnot = NULL, EandTrAnnotI = NULL,
+  EandTrAnnot = NULL, PartiallyAnnotated = FALSE, positionData = NULL,
+  transcriptData = NULL, Groups = list(c(3, 4, 5), c(6, 7, 8)),
+  Low_AllSamples = c(), Low_GSamples = c(), Location = NULL,
+  Name = "REIDS_Jun")
 }
 \arguments{
+\item{Indices}{The .csv file created by Line_Indexer.py which contains indices for every gene in geneIDs.}
+
+\item{DataFile}{The .csv file created by PivotTransformation.}
+
 \item{ASProbeSets}{The AS probe sets as identified by ASExons.}
 
-\item{JAnnotI}{A table with the line indexing for the juncion associations.}
+\item{Juninfo}{A parameter specifying wether the annotations are user of Ensembl defined. If JunInfo is "User" the annotations provided in EandTrAnnot are used. If JunInfo is "Ensembl" the annotations in EandTrAnnot are used to set up tje junction associations but the gene name and position in transcriptData and positionData are used to connect with the Ensembl data base and retrieve corresponding information.}
 
-\item{EAnnotI}{A table with the line indexing for the exon annotations.}
+\item{JAnnotI}{The file name with line indices for the junction associations.}
 
-\item{TrAnnotI}{A table with the line indexing for the transcript annotations.}
+\item{JAnnot}{The file name with the junction associations.}
 
-\item{Data}{The probe level data.}
+\item{EandTrAnnotI}{The file name with line indices for the exon and isoform annotations.}
+
+\item{EandTrAnnot}{The file name with the exon and isoform annotations.}
+
+\item{PartiallyAnnotated}{Logical. Should the exon annotations with partially annotated probe sets still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.}
+
+\item{positionData}{The file with the chromosome start and ends for the probe sets. Only needed in JunInfo=Ensembl.}
+
+\item{transcriptData}{The file with gene name of the transcripts. Only needed in JunInfo=Ensembl.}
 
 \item{Groups}{A list with  elements speficifing the columns of the data in each group.}
 
@@ -25,13 +40,38 @@ REIDS_JunctionAssesment(ASProbeSets = c(), JAnnotI, EAnnotI, TrAnnotI, Data,
 
 \item{Low_GSamples}{A list with a  character vector per group containing the probe sets which are not DABG in that group.}
 
-\item{Name}{A character string with the name of the ouput file.}
+\item{Location}{A character string indication the place where the outputs are saved.}
+
+\item{Name}{A character string with the name of the ouput file. Defaults to "REIDS_Jun".}
 }
 \value{
-The function returns three files. The first file has name "Name.txt" and contains a line per probe set. It shows the reached decision
-regarding the probe set (const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second
-file is a list of all found transcripts for a particular TC ID. The third file indicates whether a specific transcript is present or absent in a group.
+The function returns four files. The first file has name "Name_ASInfo.txt" and contains a line per probe set. It shows the reached decisionregarding the probe set (Const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The secondfile, "Name_Compositions.txt", is a list of all found transcripts for a particular TC ID. The third file,"Name_GroupTranscripts.txt" indicates whether a specific transcript is present or absent in a group. The fourth file "Name_NovelConnections.txt" contains junctions which are showing an undocumented connection between probe sets.
 }
 \description{
 The REIDS_JunctionAssessment functions assess identified AS exons based on their 5'end and 3'end and exclusion junction support.
+}
+\examples{
+\dontrun{
+data(TC1500264)
+PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,Summarize=
+c("WeightedAll","EqualAll"),rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),
+Location="Output",Name="TC1500264")
+
+TC1500264_1vs2=ASExons(ExonScores="Output/TC1500264_ExonScores.txt",ArrayScores=
+"Output/TC1500264_ArrayScores.txt",Exonthreshold=0.5,Groups=list(c(1:3),c(4:6)),paired=FALSE,
+significancelevel=0.05)
+
+ASPSR_PSR=TC1500264_1vs2[which(round(TC1500264_1vs2$ExonScore,2)>=0.50&
+TC1500264_1vs2$adj.p.value<0.05),2]
+
+REIDS_JunctionAssesment(Indices="Output/TC1500264_LineIndex.csv",DataFile=
+"Output/TC1500264_Pivot.csv",ASProbeSets=ASPSR_PSR,Juninfo="User",JAnnotI=NULL,
+JAnnot=NULL,EandTrAnnotI="Output/REMAP_Indices.txt",EandTrAnnot=
+"Output/HJAY_REMAP.txt",positionData=NULL,transcriptData=NULL,Groups=
+list(c(1:3),c(4:6)),Low_AllSamples=c(),Low_GSamples=c(),Location="Output",
+Name="TC1500264")
+}
 }

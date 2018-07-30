@@ -4,8 +4,9 @@
 \alias{reidsfunction_genebygene}
 \title{"reidsfunction_genebygene"}
 \usage{
-reidsfunction_genebygene(file_name, file_pos, line_length, nsim,
-  informativeCalls = TRUE, rho = 0.5, Low_AllSamples, Location)
+reidsfunction_genebygene(file_name, file_pos, line_length, ASPSR = c(),
+  nsim = 1000, informativeCalls = TRUE, Summarize = FALSE, rho = 0.5,
+  Low_AllSamples = c(), Location = NULL, Name = "REIDS")
 }
 \arguments{
 \item{file_name}{The name of the pivot transformed .csv file.}
@@ -14,18 +15,24 @@ reidsfunction_genebygene(file_name, file_pos, line_length, nsim,
 
 \item{line_length}{The length of the line to read.}
 
-\item{nsim}{The number of iterations to perform.}
+\item{ASPSR}{A vector with alternatively spliced probe sets which are taken out of the analysis and summarization. This is useful if Summarize is "WeightedConst" and/or "EqualConst".}
+
+\item{nsim}{The number of iterations to perform. Defaults to 1000.}
 
 \item{informativeCalls}{Logical. Should the I/NI calls method be perform before applying the REIDS model?}
+
+\item{Summarize}{A character vector specifying wich summarization method is to be performed. The choices are "EqualAll", "WeightedAll", "EqualConst" and "WeightedConst". The former two use all probe sets while the latter use only the constituitive probe sets. Summarization on the constistuitive probe sets will only be performed if ASPSR is specified.}
 
 \item{rho}{The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.}
 
 \item{Low_AllSamples}{A character vector containing the probe sets which are not DABG in all samples.}
 
 \item{Location}{A character string indication the place where the output should be saved.}
+
+\item{Name}{A name for the output to be saved at Location. Defaults to "REIDS".}
 }
 \value{
-An .RData file for each gene with the values returned by the iniREIDS and REIDS functions.
+The functions writes the obtained information to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt".
 }
 \description{
 The reidsfunction_genebygene performs the REIDS model and is an internal function of the REIDSFunction. The function calls on the pivot transformed .csv file and transforms the read lines into a data frame on which the REIDS model is performed.

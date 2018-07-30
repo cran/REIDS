@@ -5,16 +5,13 @@
 \title{DataProcessing}
 \usage{
 DataProcessing(chipType = "HuEx-1_0-st-v2", tags = "coreR3,A20071112,EP",
-  Name = "ColonCancer", ExonSummarization = TRUE,
-  GeneSummarization = TRUE, FIRMA = TRUE, location = NULL,
-  verbose = TRUE)
+  ExonSummarization = TRUE, GeneSummarization = TRUE, FIRMA = TRUE,
+  Location = NULL, Name = "", verbose = TRUE)
 }
 \arguments{
 \item{chipType}{The name of the chip type of the array data.}
 
 \item{tags}{Tags that is added to the chipType.}
-
-\item{Name}{The name of the data.}
 
 \item{ExonSummarization}{Logical. Should the data be summarized at the exon level?}
 
@@ -22,7 +19,9 @@ DataProcessing(chipType = "HuEx-1_0-st-v2", tags = "coreR3,A20071112,EP",
 
 \item{FIRMA}{Logical. Should the FIRMA model be performed on the data?}
 
-\item{location}{The location where the .rda file is to be stored. If NULL, a list containing the requested objects is returned to the user.}
+\item{Location}{The location where the .rda file is to be stored. If NULL, a list containing the requested objects is returned to the user.}
+
+\item{Name}{A string indicating the prefix for the names of the outputs to be saved at the Location. Defaults to "".}
 
 \item{verbose}{Logical. If TRUE, messages are printed during the data processing.}
 }
@@ -43,8 +42,8 @@ other columns contain the sample values. Further the object also contains a vect
 }
 \examples{
 \dontrun{
-DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
+DataProcessing(chipType="HTA-2_0",tags="*,r",
 ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,
-location="HTAData",verbose=TRUE)
+Location="HTAData",Name="HTAData",verbose=TRUE)
 }
 }

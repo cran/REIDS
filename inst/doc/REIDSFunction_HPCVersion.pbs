@@ -9,7 +9,7 @@ cd (path to directory)
 
 export OMP_NUM_THREADS=1
 
-Rscript REIDS_ClusterVersion.R $"HTAData_Pivot.csv" $position $line_length
+Rscript REIDSFunction_HPCVersion.R $"HTAData_Pivot.csv" $position $line_length
 
 
 

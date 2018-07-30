@@ -4,28 +4,47 @@
 \alias{ASExons}
 \title{"ASExons"}
 \usage{
-ASExons(Data, Exonthreshold = 0.5, Groups = list(group1 = NULL, group2 =
-  NULL), paired = FALSE, significancelevel = 0.05)
+ASExons(ExonScores, ArrayScores, Exonthreshold = 0.5, Groups = list(group1 =
+  NULL, group2 = NULL), paired = FALSE, significancelevel = 0.05,
+  Location = NULL, Name = "REIDSAS")
 }
 \arguments{
-\item{Data}{The Data on which testing of the array scores should be conducted. This can be either the output of the REIDS model or the ExonTesting function.}
+\item{ExonScores}{The path to the file with the exon scores of the probe sets.}
 
-\item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
+\item{ArrayScores}{The path to the file with the array scores of the probe sets.}
+
+\item{Exonthreshold}{The exon score threshold to be maintained. If not NULL, probe sets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.}
 
 \item{Groups}{A list with elements specifying the columns of the data in each group.}
 
 \item{paired}{Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.}
 
 \item{significancelevel}{The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.}
+
+\item{Location}{A character string indication the place where the outputs are saved.}
+
+\item{Name}{A character string with the name of the ouput file. Defaults to "REIDSAS".}
 }
 \value{
-A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
+A data frame with one line per exon. The columns contain the gene ID, the exon ID, the exon score the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
 }
 \description{
-The ASExons functions can be performed either on the output of the REIDS model or on the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
+The ASExons functions alternatively spliced exons from the exon scores and array scores. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
 }
 \examples{
-data(TC12000010_REIDS_Output)
-ASTest=ASExons(Data=TC12000010_REIDS_Output,Exonthreshold=0.5,Groups=list(c(1:9),c(10:18)),
+\dontrun{
+data(TC1500264)
+
+PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+
+REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,Summarize=
+c("WeightedAll","EqualAll"),rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),
+Location="Output",Name="TC1500264")
+
+TC1500264_1vs2=ASExons(ExonScores="Output/TC1500264_ExonScores.txt",ArrayScores=
+"Output/TC1500264_ArrayScores.txt",Exonthreshold=0.5,Groups=list(c(1:3),c(4:6)),
 paired=FALSE,significancelevel=0.05)
+}
 }

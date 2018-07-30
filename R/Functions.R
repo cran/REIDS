@@ -3,7 +3,6 @@
 
 ## IMPORTS ##
 
-#' @import aroma.affymetrix
 #' @import aroma.core
 #' @import GenomeGraphs
 #' @import biomaRt
@@ -12,6 +11,7 @@
 #' @importFrom RColorBrewer brewer.pal
 #' @importFrom lmtest lrtest
 #' @importFrom methods hasArg
+#' @importFrom aroma.affymetrix AffymetrixCdfFile AffymetrixCelSet RmaBackgroundCorrection writeCdf QuantileNormalization getCellIndices getData getCdf setCdf ExonRmaPlm getChipEffectSet extractDataFrame FirmaModel getFirmaScores
 
 ##### DATA PROCESSING FUNCTIONS #####
 
@@ -26,11 +26,11 @@
 #' @export
 #' @param chipType The name of the chip type of the array data.
 #' @param tags Tags that is added to the chipType.
-#' @param Name The name of the data.
 #' @param ExonSummarization Logical. Should the data be summarized at the exon level?
 #' @param GeneSummarization Logical. Should the data be summarized at the gene level?
 #' @param FIRMA Logical. Should the FIRMA model be performed on the data?
-#' @param location The location where the .rda file is to be stored. If NULL, a list containing the requested objects is returned to the user.
+#' @param Location The location where the .rda file is to be stored. If NULL, a list containing the requested objects is returned to the user.
+#' @param Name A string indicating the prefix for the names of the outputs to be saved at the Location. Defaults to "". 
 #' @param verbose Logical. If TRUE, messages are printed during the data processing.
 #' @return An .rda file that is saved at the specified location.
 #' @details The DataProcessing function is a wrapper of several functions of the aroma.affymetrix package. To obtain the data to perform the REIDS model on the raw .CEL files are 
@@ -42,11 +42,11 @@
 #' other columns contain the sample values. Further the object also contains a vector of the unique gene ID and a vector of the  unique exon IDs. If requested, exon and gene level summarization are performed and saved as data frames at the specified location. Further,the option is provided to perform the FIRMA model on the data as well.
 #' @examples
 #' \dontrun{
-#' DataProcessing(chipType="HTA-2_0",tags="*,r",Name="HTAData",
+#' DataProcessing(chipType="HTA-2_0",tags="*,r",
 #' ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,
-#' location="HTAData",verbose=TRUE)
+#' Location="HTAData",Name="HTAData",verbose=TRUE)
 #' }
-DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Name="ColonCancer",ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,location=NULL,verbose=TRUE){
+DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",ExonSummarization=TRUE,GeneSummarization=TRUE,FIRMA=TRUE,Location=NULL,Name="",verbose=TRUE){
 	
 	if(verbose==TRUE){
 		verbose <- Arguments$getVerbose(-8, timestamp=TRUE)
@@ -140,9 +140,9 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 	
 	
 	
-	if(!(is.null(location))){
+	if(!(is.null(Location))){
 		assign(Name,Data,envir=environment())
-		eval(parse(text=paste("save(",Name,",UniqueGeneID,UniqueExonID,file=\"",location,"/", Name, ".RData\")", sep=""))) 			
+		eval(parse(text=paste("save(",Name,",UniqueGeneID,UniqueExonID,file=\"",Location,"/", Name, ".RData\")", sep=""))) 			
 	}
 	
 	
@@ -159,9 +159,9 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 		colnames(ExonLevelSummarized_rma)[c(1,2)]=c("GeneID","ExonID")
 		ExonLevelSummarized_rma[,-c(1,2)]=log2(ExonLevelSummarized_rma[,-c(1,2)])
 		
-		if(!(is.null(location))){
+		if(!(is.null(Location))){
 			assign(paste(Name,"ExonLevelSummarized",sep="_"),ExonLevelSummarized_rma,envir=environment())
-			eval(parse(text=paste("save(",Name, "_ExonLevelSummarized, file=\"",location,"/",Name,"", "_ExonLevelSummarized.RData\")", sep=""))) 
+			eval(parse(text=paste("save(",Name, "_ExonLevelSummarized, file=\"",Location,"/",Name,"", "_ExonLevelSummarized.RData\")", sep=""))) 
 		}
 		
 		
@@ -180,9 +180,9 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 		colnames(GeneLevelSummarized_rma)[1]=c("GeneID")
 		GeneLevelSummarized_rma[,-c(1)]=log2(GeneLevelSummarized_rma[,-c(1)])
 		
-		if(!(is.null(location))){
+		if(!(is.null(Location))){
 			assign(paste(Name,"GeneLevelSummarized",sep="_"),GeneLevelSummarized_rma,envir=environment())
-			eval(parse(text=paste("save(",Name, "_GeneLevelSummarized, file=\"",location,"/",Name,"", "_GeneLevelSummarized.RData\")", sep=""))) 
+			eval(parse(text=paste("save(",Name, "_GeneLevelSummarized, file=\"",Location,"/",Name,"", "_GeneLevelSummarized.RData\")", sep=""))) 
 		}
 		
 		
@@ -202,19 +202,66 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 
 		FIRMA_Output=exFit
 		
-		if(!(is.null(location))){
+		if(!(is.null(Location))){
 			assign(paste(Name,"FIRMA_Output",sep="_"),FIRMA_Output,envir=environment())
-			eval(parse(text=paste("save(",Name, "_FIRMA_Output, file=\"",location,"/",Name,"", "_FIRMA_Output.RData\")", sep=""))) 
+			eval(parse(text=paste("save(",Name, "_FIRMA_Output, file=\"",Location,"/",Name,"", "_FIRMA_Output.RData\")", sep=""))) 
+		}
+	}
+
+}
+
+
+#' "REMAP_SplitProbeSets"
+#' 
+#' The REMAP_SplitProbeSets function converts the original data frame to a data frame based on the retrieved REMAP annotation.
+#' @export
+#' @param Data The data frame to be transformed.
+#' @param REMAPSplitFile The name of the file with the REMAP information regarding the split of the probe sets if the TC ID is annotated to mutiple genes.
+#' @param NotAnnotated Logical. Should the probe sets which are not annotated to a gene still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param Location The location where the file should be saved. If NULL, the object is returned to the user. Otherwise, a file with the specified name is created.
+#' @param Name The name of the output file. Defaults to "REMAP".
+#' @return A data frame with similar information as the data frame specified in Data with an altered gene ID (first) column in order to match the REMAP annotation.
+#' @examples
+#' \dontrun{
+#' data(TC1500264)
+#' 
+#' REMAPTest=REMAP_SplitProbeSets(Data=TC1500264,REMAPSplitFile=
+#' "TC1500264_Gene_Split.txt")
+#' }
+REMAP_SplitProbeSets<-function(Data,REMAPSplitFile,NotAnnotated=FALSE,Location=NULL,Name="REMAP"){
+	
+	SplitFile=utils::read.table(REMAPSplitFile,header=FALSE,stringsAsFactors=FALSE)
+	
+	Data[,1]=as.character(Data[,1])
+	
+	Changed=rep(0,nrow(Data))
+	for(i in 1:nrow(SplitFile)){
+		set=strsplit(SplitFile[i,3],"[|]")[[1]]
+		if(NotAnnotated){
+			Data[which(as.character(Data[,2])%in%set),1]=SplitFile[i,2]
+			Changed[which(as.character(Data[,2])%in%set)]=1	
+		}
+		else{
+			if(grepl("_",SplitFile[i,2])){
+				Data[which(as.character(Data[,2])%in%set),1]=SplitFile[i,2]
+				Changed[which(as.character(Data[,2])%in%set)]=1	
+			}
 		}
 	}
 	
-	if(is.null(location)){
-		Out=list(Data,ExonLevelSummarized_rma,GeneLevelSummarized_rma,FIRMA_Output)
-		names(Out)=c("Data","ExonLevelSummarized","GeneLevelSummarized","FIRMA")
-		return(Out)
+	if(any(Changed==0)){
+		Data=Data[-c(which(Changed==0)),]
+	}
+	
+	Data=Data[order(Data[,1]),]
+
+	if(!(is.null(Location))){
+		save(Data,file=paste(Location,"/",Name,".RData",sep=""))	
+	}
+	else{
+		return(Data)
 	}
 }
-
 
 ## Pivot Transformation
 ## Data format should be an data.frame with an GeneID colum, ExonID column and a column per array ##
@@ -226,54 +273,125 @@ DataProcessing<-function(chipType="HuEx-1_0-st-v2",tags="coreR3,A20071112,EP",Na
 #' @param Data The data frame to be transformed.
 #' @param GeneID A character vector of the the gene IDs that correspond to the rows of the data frame. Necessary if no GeneID column is present in the data frame
 #' @param ExonID A character vector of the the gene IDs that correspond to the rows of the data frame. Necessary if no ExonID column is present in the data frame
-#' @param Location The location and name where the file should be saved. If NULL, the object is returned to the user. Otherwise, a file with the specified name is created.
-#' @return A data frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster.
+#' @param REMAPSplitFile The name of the file with the REMAP information regarding the split of the probe sets if the TC ID is annotated to mutiple genes.
+#' @param NotAnnotated Logical. Should the probe sets which are not annotated to a gene still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param Location The location where the file should be saved. If NULL, the object is returned to the user. Otherwise, a file with the specified name is created.
+#' @param Name The name of the output file. Defaults to "Pivot".
+#' @return A data frame with one row per gene. This row contains the values for each exon per sample and is convenient for processing on a HPC cluster. Futher also a data frame with a column of the gene ID's is returned.
 #' @details All information concerning one gene is gathered. The first column of the returned data frame is the gene ID, the second column contains the exon IDs of all exons of that gene. The third colum indicates the number of probes per exon, the fourth contains the values of thos probes per sample and the last column contains the sample names.This way a .csv file is created for processing on a HPC cluster.
 #' @examples
 #' data(TC12000010)
 #' 
 #' PivotTest=PivotTransformData(Data=TC12000010,GeneID=NULL,ExonID=NULL,
 #' Location=NULL)
-PivotTransformData<-function(Data, GeneID=NULL,ExonID=NULL,Location=NULL){
-	Data=as.data.frame(Data)
+#' 
+#' \dontrun{
+#' data(TC1500264)
+#' 
+#' PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+#' REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location=
+#' "Output",Name="TC1500264_Pivot")
+#' }
+PivotTransformData<-function(Data,GeneID=NULL,ExonID=NULL,REMAPSplitFile=NULL,NotAnnotated=FALSE,Location=NULL,Name="Pivot"){
+	Data=as.data.frame(Data,stringsAsFactor=FALSE)
+	
+	if(!is.null(REMAPSplitFile)){
+		SplitFile=utils::read.table(REMAPSplitFile,header=FALSE,stringsAsFactors=FALSE)
+	}
+	else{
+		SplitFile=NULL
+	}
+	
 	
 	if(is.null(Data$GeneID)&is.null(Data$ExonID)){
 		DataTemp=data.frame(GeneID=GeneID,ExonID=ExonID)
 		DataTemp=cbind(DataTemp,Data)
 		Data=DataTemp
-	}else if(is.null(GeneID)){
-		GeneID=Data$GeneID
-	}else if(is.null(ExonID)){
-		ExonID=Data$ExonID
+	}else{
+		GeneID=as.character(Data$GeneID)
+		ExonID=as.character(Data$ExonID)
 	}
 	
 	## From this point we assume that the first column of the data is a Gene ID and the second column is the Exon ID
 	
-	Transformation<-function(gID,Data){
+	Transformation<-function(gID,Data,SplitFile,NotAnnotated){
 		Subset=Data[which(Data$GeneID==gID),]
-		
-		generow=c()
-		gID=as.character(gID)
-		
-		eID=unique(Subset$ExonID)
-		lengthe=sapply(eID,function(x) return(length(which(Subset$ExonID==x))))
-		
-		eID=paste(as.character(eID),sep="",collapse=",")
-		lengthe=paste(as.character(lengthe),sep="",collapse=",")
-		
-		#get all samples at once: apply on columns of the Subset data and discard the geneID and exonID columns
-		samples=apply(Subset[,-c(1,2)],2,function(x) paste(as.character(x),sep="",collapse=","))
-		allsamples=paste(samples,sep="",collapse=",")
-		samplenames=paste(colnames(Data)[-c(1,2)],sep="",collapse=",")
-		#put everything intro c()
-		generow=c(gID,eID,lengthe,allsamples,samplenames)
-		
+		if(!is.null(SplitFile)){
+			Split=SplitFile[which(SplitFile[,1]==gID),,drop=FALSE]
+			if(nrow(Split)!=1){
+				#multiple genes annotated to the same TC ID
+				gIDs=SplitFile[,2]
+				generow=c()
+				for(g in 1:length(gIDs)){
+					
+					if(!NotAnnotated){
+						if(!grepl("_",gIDs[g])){
+							next
+						}
+					}
+					
+					gIDTC=as.character(gIDs[g])
+					
+					eIDs=unique(Subset$ExonID)
+					Set=strsplit(SplitFile[g,3],"[|]")[[1]]
+					eID=eIDs[which(eIDs%in%Set)]
+					lengthe=sapply(eID,function(x) return(length(which(Subset$ExonID==x))))
+					
+					eIDall=paste(as.character(eID),sep="",collapse=",")
+					lengthe=paste(as.character(lengthe),sep="",collapse=",")
+					
+					#get all samples at once: apply on columns of the Subset data and discard the geneID and exonID columns
+					samples=apply(Subset[which(Subset[,2]%in%eID),-c(1,2)],2,function(x) paste(round(as.numeric(as.character(x)),4),sep="",collapse=","))
+					allsamples=paste(samples,sep="",collapse=",")
+					samplenames=paste(colnames(Data)[-c(1,2)],sep="",collapse=",")
+					#put everything intro c()
+					generow=rbind(generow,c(gIDTC,eIDall,lengthe,allsamples,samplenames))
+
+				}
+			}
+			else{
+				gID=Split[1,2]
+				generow=c()
+				gID=as.character(gID)
+				
+				eID=unique(Subset$ExonID)
+				lengthe=sapply(eID,function(x) return(length(which(Subset$ExonID==x))))
+				
+				eID=paste(as.character(eID),sep="",collapse=",")
+				lengthe=paste(as.character(lengthe),sep="",collapse=",")
+				
+				#get all samples at once: apply on columns of the Subset data and discard the geneID and exonID columns
+				samples=apply(Subset[,-c(1,2)],2,function(x) paste(as.character(x),sep="",collapse=","))
+				allsamples=paste(samples,sep="",collapse=",")
+				samplenames=paste(colnames(Data)[-c(1,2)],sep="",collapse=",")
+				#put everything intro c()
+				generow=c(gID,eID,lengthe,allsamples,samplenames)
+			}
+		}
+		else{
+			generow=c()
+			gID=as.character(gID)
+			
+			eID=unique(Subset$ExonID)
+			lengthe=sapply(eID,function(x) return(length(which(Subset$ExonID==x))))
+			
+			eID=paste(as.character(eID),sep="",collapse=",")
+			lengthe=paste(as.character(lengthe),sep="",collapse=",")
+			
+			#get all samples at once: apply on columns of the Subset data and discard the geneID and exonID columns
+			samples=apply(Subset[,-c(1,2)],2,function(x) paste(as.character(x),sep="",collapse=","))
+			allsamples=paste(samples,sep="",collapse=",")
+			samplenames=paste(colnames(Data)[-c(1,2)],sep="",collapse=",")
+			#put everything intro c()
+			generow=c(gID,eID,lengthe,allsamples,samplenames)
+		}	
+		return(generow)
 	}
 	#use rbindlist to get a full data file
-	DataPivot=lapply(unique(GeneID),Transformation,Data)
-	DataBind=t(rbindlist(list(DataPivot)))
+	DataPivot=lapply(unique(GeneID),Transformation,Data,SplitFile,NotAnnotated)
+	DataBind=do.call("rbind",DataPivot)
 	colnames(DataBind)=c("GeneID","ExonID","lengthexons","allsamples","samplenames")
-	rownames(DataBind)=unique(GeneID)
+	rownames(DataBind)=unique(DataBind[,1])
 	
 	DataBind=as.data.frame(DataBind)
 	DataBind$GeneID=as.character(DataBind$GeneID)
@@ -282,15 +400,19 @@ PivotTransformData<-function(Data, GeneID=NULL,ExonID=NULL,Location=NULL){
 	DataBind$allsamples=as.character(DataBind$allsamples)
 	DataBind$samplenames=as.character(DataBind$samplenames)
 	
+	GeneID=unique(as.character(DataBind$GeneID))
+	GeneTable=data.frame("GeneID"=GeneID)
+	
+	
 	if(!(is.null(Location))){
-		utils::write.table(DataBind,file=Location,row.names=FALSE,col.names=TRUE,sep=",",quote=TRUE,qmethod="double")
+		utils::write.table(DataBind,file=paste(Location,"/",Name,".csv",sep=""),row.names=FALSE,col.names=TRUE,sep=",",quote=TRUE,qmethod="double")
+		save(GeneTable,file=paste(Location,"/",Name,"_GeneTable.RData",sep=""))	
 	}
 	else{
-		return(DataBind)
+		return(list(DataBind,GeneTable))
 	}
 	
 }
-
 
 ##### REIDS FUNCTIONS ######
 
@@ -423,10 +545,9 @@ iniREIDS<- function(SubgeneData, nsim=1000) {
 #' The function is part of the larger REIDS function and performs the REIDS model on the data for a single gene.
 #' @export
 #' @param SubgeneData A subset of the data. Particularly, a subset of the data corresponding to one gene.
-#' @param nsim The number of iterations to perform.
-#' @return A list with 2 items per gene. The first item is the exon scores of the corresponding probesets and the second contains a data frame with the array scores of the exons across the samples.
-#' If the iniREIDS model was performed. The items will be added to the previously made list.
-REIDSmodel_intern<- function(SubgeneData, nsim=100) {
+#' @param nsim The number of iterations to perform. Defaults to 1000.
+#' @return A list with 2 items per gene. The first item is the exon scores of the corresponding probesets and the second contains a data frame with the array scores of the exons across the samples. If the iniREIDS model was performed. The items will be added to the previously made list.
+REIDSmodel_intern<- function(SubgeneData, nsim=1000) {
 	
 	nprobes <- nrow(SubgeneData)
 	nsamples<- ncol(SubgeneData)
@@ -439,11 +560,14 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 	
 	if(length(levels(probes))==1){
 		geneRes=rep(0,length(probes))
+		Probes<-geneExp
+		ID<-rep(0,length(unique(id)))
 	}
 	else{
-		ft <- stats::lm(geneExp~probes+id-1,x=TRUE)  #Difference from iniREIDS: id(samples) is involved in the calculation
-		
-		beta<- as.vector(summary(ft)$coefficient[,1])
+		ft <- stats::lm(geneExp~probes+id-1,x=TRUE)  #Difference from inigds: id(samples) is involved in the calculation	
+		Probes<- as.vector(summary(ft)$coefficient[1:nprobes,1])
+		ID<-as.vector(summary(ft)$coefficient[(nprobes+1):(nprobes+length(unique(id))-1),1])
+		ID<-c(0,ID)
 		fixedDesignMatrix <- as.matrix(as.data.frame(ft$x)) ## create designsamples matrix
 		geneRes <- as.vector(summary(ft)$residuals)
 	}
@@ -485,10 +609,11 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 	Taub<-diag(G)			# Ransamplesdom Effects Prec Matrix
 	z <- grp
 	Taub <- diag(1,G,G)
-	
 	for (i in 1:nsim){
-		
-		set.seed(123*i+i)
+#		if(i==1){
+#			ptm<-proc.time()
+#		}	
+#		set.seed(123*i+i)
 		
 		# Update b
 		cZZ <- diag(colSums(Z))
@@ -499,7 +624,7 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 		mb <- apply(vb,1,function(x) sum(x*mb2))
 		vb1 <- diag(vb)
 		b<-sapply(c(1:(nsamples*G)),function(x) stats::rnorm(1,mean=mb[x],sd=sqrt(vb1[x])))
-		bmat<-matrix(b,ncol=G,byrow=T)  		# Put insamples nsamples x G matrix form for updatinsamplesg taub
+		bmat<-matrix(b,ncol=G,byrow=TRUE)  		# Put insamples nsamples x G matrix form for updatinsamplesg taub
 		
 		
 		# Update tau
@@ -520,22 +645,34 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 			outputsigma[(i-nburnin),] <- as.vector(diag(Sigma.b))
 			
 		}
+		
+#		if(i==1){
+#			time<-proc.time()-ptm
+#			if(time[1]>2){
+#				FailedItems=read.table("FailedGenes.csv",header=FALSE)
+#				FailedItems[length(FailedItems)+1]=geneID
+#				write.table(FailedItems,file="FailedGenes.csv",row.names=FALSE)
+#				stop("Computational time of gds exceeded 2 seconds per iteration")
+#			}
+#		}
 	}
 	
-	tp1 <- apply(outputsigma,2,function(x) stats::quantile(x, probs = c(0.025, 0.5, 0.95)))
-	tp2 <- stats::quantile(outputerror, probs = c(0.025, 0.5, 0.95))
-	icc <- t(apply(tp1,2,function(x) x/(x+tp2)))
-	icc <- data.frame(exon=uz,type="icc",icc )
+	exon_variances=apply(outputsigma,2,function(x) stats::quantile(x, probs = c(0.5)))
+	epsilon_error=stats::quantile(outputerror, probs = c(0.5))
+	icc <- sapply(exon_variances,function(x) x/(x+epsilon_error))
+	icc <- data.frame(exon=uz,type="icc",icc)
 	nik <- as.vector(t(sapply(uz,function(x) rep(x,nsamples))))
-	ikEffect2  <- t(apply(outputbik,2,function(x) stats::quantile(x, probs = c(0.025, 0.5, 0.95))))
-	ikEffect<- data.frame(exon=nik,type="bik",ikEffect2)
-	exonscore <- icc[,c(1,4)]
-	arrayscore <- ikEffect[,4] 
+	exon_effects<- apply(outputbik,2,function(x) stats::quantile(x, probs = c(0.5)))
+	exon_effects<- data.frame(exon=nik,type="bik",exon_effects)
+	exonscore=data.frame(icc=icc[,3])
+	rownames(exonscore)=icc$exon
 	
+	arrayscore=exon_effects[,3]
 	dim(arrayscore)<- c(G,nsamples)
-	rownames(arrayscore)<-ikEffect$exon[1:G] 
+	rownames(arrayscore)<-exon_effects$exon[1:G]
 	colnames(arrayscore) <- colnames(SubgeneData)
-	Output <- list(exonScores=exonscore,arrayScores=arrayscore)
+	
+	Output <- list(exonScores=exonscore,arrayScores=arrayscore,errorVar=epsilon_error,exonVar=exon_variances,probeEffects=Probes,sampleEffects=ID)
 	return(Output)
 }
 
@@ -544,28 +681,39 @@ REIDSmodel_intern<- function(SubgeneData, nsim=100) {
 # This function is accompagnied with a .pbs file in the documentation folder. It is advised to run this model an a HPC cluster and not on a regular laptop as it will
 # consume time and memory
 
-#' "REIDS_ClusterVersion"
+#' "REIDS_HPCVersion"
 #' 
-#' The REIDS_ClusterVersion performs the REIDS model and was adapted for use on a HPC cluster. This function should be used with the REIDS_ClusterVersion.R file and REIDS_ClusterVersion.pbs script in the documentation folder of the package.
+#' The REIDS_ClusterVersion performs the REIDS model and was adapted for use on a HPC cluster. This function should be used with the REIDS_HPCVersion.R file and REIDS_HPCVersion.pbs script in the documentation folder of the package.
 #' After running this function on the cluster, the output files should be binded together with the CreateOutput function.
 #' @export
+#' @param geneID The gene ID
 #' @param geneData The data with as rows the probesets and as columns the samples. Note that the first column should contain the gene IDs and the second column the exon IDs
-#' @param nsim The number of iterations to perform.
-#' @param geneID A vector of the gene IDs.
+#' @param ASPSR A vector with alternatively spliced probe sets which are taken out of the analysis and summarization. This is useful if Summarize is "WeightedConst" and/or "EqualConst".
+#' @param nsim The number of iterations to perform. Defaults to 1000.
 #' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
+#' @param Summarize A character vector specifying wich summarization method is to be performed. The choices are "EqualAll", "WeightedAll", "EqualConst" and "WeightedConst". The former two use all probe sets while the latter use only the constituitive probe sets. Summarization on the constistuitive probe sets will only be performed if ASPSR is specified.
 #' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
 #' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
-#' @return A .RData file will be saved for each gene with the elements returned by the iniREIDS and REIDS functions.
-REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCalls=TRUE,rho=0.5,Low_AllSamples){
+#' @return A .RData file will be saved for each gene with the elements returned by the iniREIDS and REIDS functions. The outputs can be bound together by CreateOutput.
+REIDSFunction_HPCVersion<- function(geneID,geneData,ASPSR=c(),nsim=1000,informativeCalls=TRUE,Summarize=FALSE,rho=0.5,Low_AllSamples=c()){
+	
+	if(length(ASPSR)>0){
+		AS=which(geneData[,2]%in%ASPSR)
+		if(length(AS)>0){
+			geneData=geneData[-c(which(geneData[,2]%in%AS)),,drop=FALSE]
+		}
+	}
 	
 	DABGs=which(geneData[,2]%in%Low_AllSamples)
 	if(length(DABGs)>0){
 		geneData=geneData[-c(which(geneData[,2]%in%Low_AllSamples)),,drop=FALSE]
 	}
+	
 	Juncs=which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")
 	if(length(Juncs)>0){
 		geneData=geneData[-c(which(sapply(geneData[,2],function(x) substr(x,1,3))=="JUC")),,drop=FALSE]
 	}
+	
 	exonScore <- arrayScore <- informativeData<- NULL
 	
 	output=list()
@@ -582,7 +730,7 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 	i=1
 	if(informativeCalls){			
 		fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
-		fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level, no replicates
+		fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level,no replicates
 		output[[1]][[i]]=fit2
 		names(output[[1]])[i]="Informative"
 		iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
@@ -591,16 +739,122 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 	}
 	
 	
-	if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>1){  
+	if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>=3){  
 		fit <- REIDSmodel_intern(SubgeneData=lcmmData, nsim) 
+		
 		exonScore <-fit$exonScores
 		arrayScore <- fit$arrayScores
 		output[[1]][[i]]=exonScore
 		names(output[[1]])[i]="exonScore"
 		output[[1]][[i+1]]=arrayScore
 		names(output[[1]])[i+1]="arrayScore"
+		i=i+2
+		
+		if(any(c("EqualAll","WeightedAll")%in%Summarize)){
+			exonVariances<-fit$exonVar	
+			probeEffects<-fit$probeEffects
+			sampleEffects<-fit$sampleEffects
+			estimatedvalues<-fit$arrayScores
+			
+			if("WeightedAll"%in%Summarize){## with weights
+				TotalExonVar=sum(1/exonVariances)
+				Weights=(1/exonVariances)/TotalExonVar
+				names(Weights)=unique(rownames(lcmmData))
+				
+				arrayLevels=apply(estimatedvalues,2,function(j) sum(Weights*j))
+				
+				WeightedGeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+				
+				output[[1]][[i]]=Weights
+				names(output[[1]])[i]="WeightsAllProbesets"
+				
+				output[[1]][[i+1]]=WeightedGeneLevelEstimates
+				names(output[[1]])[i+1]="WeightedAll"
+			}
+			if("EqualAll"%in%Summarize){
+				
+				## without weights		
+				arrayLevels=apply(estimatedvalues,2,mean)
+				GeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+				
+				output[[1]][[i+2]]=GeneLevelEstimates
+				names(output[[1]])[i+2]="EqualAll"
+			}
+			i=i+3
+			
+			#ExonLevelValues
+			
+			ProbeLevel=matrix(probeEffects)
+			rownames(ProbeLevel)=geneData[,2]
+			PSR=unique(geneData[,2])
+			ExonLevelEstimates=matrix(0,nrow=length(PSR),ncol=length(sampleEffects))
+			for(e in 1:length(PSR)){
+				E=mean(ProbeLevel[which(rownames(ProbeLevel)==PSR[e]),])+sampleEffects+estimatedvalues[which(rownames(estimatedvalues)==PSR[e]),]
+				ExonLevelEstimates[e,]=E
+			}
+			rownames(ExonLevelEstimates)=PSR
+			
+			output[[1]][[i]]=ExonLevelEstimates
+			names(output[[1]])[i]="ExonLevel"
+			i=i+1
+		}
+		if(any(c("EqualConst","WeightedConst")%in%Summarize)){
+			exonVariances<-fit$exonVar	
+			names(exonVariances)=unique(rownames(lcmmData))
+			probeEffects<-fit$probeEffects
+			sampleEffects<-fit$sampleEffects
+			estimatedvalues<-fit$arrayScores
+			
+			if("WeightedConst"%in%Summarize){## with weights
+				TotalExonVar=sum(1/exonVariances)
+				Weights=(1/exonVariances)/TotalExonVar
+				names(Weights)=unique(rownames(lcmmData))
+				
+				arrayLevels=apply(estimatedvalues,2,function(j) sum(Weights*j))
+				
+				WeightedGeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+				
+				output[[1]][[i]]=Weights
+				names(output[[1]])[i]="WeightsConstProbesets"
+				
+				output[[1]][[i+1]]=WeightedGeneLevelEstimates
+				names(output[[1]])[i+1]="WeightedConst"
+			}
+			if("EqualConst"%in%Summarize){
+				
+				## without weights		
+				arrayLevels=apply(estimatedvalues,2,mean)
+				GeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+				
+				output[[1]][[i+2]]=GeneLevelEstimates
+				names(output[[1]])[i+2]="EqualConst"
+			}
+			i=i+3
+			
+			#ExonLevelValues
+			
+			ProbeLevel=matrix(probeEffects)
+			rownames(ProbeLevel)=geneData[,2]
+			PSR=unique(geneData[,2])
+			ExonLevelEstimates=matrix(0,nrow=length(PSR),ncol=length(sampleEffects))
+			for(e in 1:length(PSR)){
+				E=mean(ProbeLevel[which(rownames(ProbeLevel)==PSR[e]),])+sampleEffects+estimatedvalues[which(rownames(estimatedvalues)==PSR[e]),]
+				ExonLevelEstimates[e,]=E
+			}
+			rownames(ExonLevelEstimates)=PSR
+			
+			output[[1]][[i]]=ExonLevelEstimates
+			if(length(AS)==0){
+				names(output[[1]])[i]="ExonLevel"
+				i=i+1
+			}
+			else{
+				names(output[[1]])[i]="ExonLevel_Const"
+				i=i+1
+			}
+		}
 	}
-	
+
 	return(output)
 }
 
@@ -609,23 +863,157 @@ REIDSFunction_ClusterVersion<- function(geneData,nsim=1000,geneID,informativeCal
 
 #' "CreateOutput"
 #' 
-#' The CreateOutput functions bind the .RData files returned by the REIDS_ClusterVersion together into one list with an element per gene. The function is advised to be used with the CreateOutput.R and CreateOutput.pbs file in the documentation folder.
+#' The CreateOutput functions writes the .RData files returned by the REIDS_HPCVersion to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt". 
+#' The function can also be used for the returned files of REIDSIsoformAssesment_HPCVersion for which it will create the files: "Name_ASInfo.txt" "Name_Compositions.txt","Name_GroupTranscripts.txt" and "Name_NovelConnections".
+#' The function is advised to be used with the CreateOutput.R and CreateOutput.pbs file in the documentation folder.
 #' @export
 #' @param ID A data frame with a "geneID" column.
+#' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param Name A name for the returned list.
 #' @param Location The location where the file should be saved.
-#' @return A list with the output of the REIDS_ClusterVersion binded together for all genes.
-CreateOutput<-function(ID,Name,Location=""){
-	Output=list()
-	for(i in as.character(ID$geneID)){
-		Data=get(load(paste(Location,"/REIDS_Gene_",as.character(i),".RData",sep="")))
+#' @return .txt files with the information of the REIDSFunction and REIDSJunctionAssesment.
+CreateOutput<-function(ID,Groups,Location="",Name){
+	ID=as.vector(as.matrix(ID))
+	REIDSOutputFiles=list.files(path=Location,pattern="^REIDS_Gene_")
+	if(length(REIDSOutputFiles)>0){
+		Output=list()
+		for(i in as.character(ID)){
+			Data=try(get(load(paste(Location,"/REIDS_Gene_",as.character(i),".RData",sep=""))),silent=TRUE)
+			if(class(Data)!="try-error"){
+				Output[length(Output)+1]=Data
+				names(Output)[length(Output)]=i
+			}
+		}
 		
-		Output[length(Output)+1]=Data
-		names(Output)[length(Output)]=i
+		assign(paste(Name,"_REIDS_Output",sep=""),Output,envir=environment())
+		eval(parse(text=paste("save(",Name, "_REIDS_Output, file=\"",Location,"/",Name, "_REIDS_Output.RData\")", sep=""))) 
+		
+		for(l in 1:length(Output)){
+			utils::write.table(t(c("TC_ID","PSR_ID","Informative")), file = paste(Location,"/",Name,"_INICalls.txtt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID","PSR_ID","ExonScore")), file = paste(Location,"/",Name,"_ExonScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID","PSR_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_ArrayScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_WeightedAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_EqualAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_WeightedConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_EqualConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID","PSR_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_ExonLevel.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			
+			#if gene and exon level summ values are available: collect these.
+			if("Informative"%in%names(Output[[l]])){
+				
+				utils::write.table(t(Output[[l]]$"Informative"), paste(Location,"/",Name,"_INICalls.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+
+			}
+			if("exonScore"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"exonScore"), paste(Location,"/",Name,"_ExonScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				
+			}
+			if("arrayScore"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"arrayScore"), paste(Location,"/",Name,"_ArrayScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				
+			}
+			if("WeightedAll"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"WeightedAll"), paste(Location,"/",Name,"_WeightedAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+#				
+#				WeightedAll=do.call("rbind",lapply(Output,function(x) x$WeightedGeneLevelEstimatesAllProbesets))	
+#				assign(paste("EventPointer_REIDS_Output_WeightedAll",sep=""),WeightedAll,envir=environment())
+#				save(EventPointer_REIDS_Output_WeightedAll, file="EventPointer_REIDS_Output_WeightedAll.RData")	
+			}
+			if("WeightedAll"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"WeightedAll"), paste(Location,"/",Name,"_WeightedAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+#				
+#				WeightedAll=do.call("rbind",lapply(Output,function(x) x$WeightedGeneLevelEstimatesAllProbesets))	
+#				assign(paste("EventPointer_REIDS_Output_WeightedAll",sep=""),WeightedAll,envir=environment())
+#				save(EventPointer_REIDS_Output_WeightedAll, file="EventPointer_REIDS_Output_WeightedAll.RData")	
+			}
+			if("EqualAll"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"EqualAll"), paste(Location,"/",Name,"_EqualAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+#				
+#				EqualAll=do.call("rbind",lapply(Output,function(x) x$GeneLevelEstimatesAllProbesets))	
+#				assign(paste("EventPointer_REIDS_Output_EqualAll",sep=""),EqualAll,envir=environment())
+#				save(EventPointer_REIDS_Output_WeightedAll, file="EventPointer_REIDS_Output_EqualAll.RData")
+			}
+			if("ExonLevel"%in%names(Output[[l]])){
+				utils::write.table(Output[[l]]$"ExonLevel", paste(Location,"/",Name,"_ExonLevel.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				
+#				ExonLevel=do.call("rbind",lapply(Output,function(x) x$ExonLevelEstimates))	
+#				assign(paste("EventPointer_REIDS_Output_ExonLevel",sep=""),ExonLevel,envir=environment())
+#				save(EventPointer_REIDS_Output_ExonLevel, file="EventPointer_REIDS_Output_ExonLevel.RData")
+			}
+			if("WeightedConst"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"WeightedConst"), paste(Location,"/",Name,"_WeightedConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)				
+#				WeightedConst=do.call("rbind",lapply(Output,function(x) x$WeightedGeneLevelEstimatesConstProbesets))	
+#				assign(paste("EventPointer_REIDS_Output_WeightedConst",sep=""),WeightedConst,envir=environment())
+#				save(EventPointer_REIDS_Output_WeightedConst, file="EventPointer_REIDS_Output_WeightedConst.RData")
+			}
+			if("EqualConst"%in%names(Output[[l]])){
+				utils::write.table(t(Output[[l]]$"EqualConst"), paste(Location,"/",Name,"_EqualConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)					
+#				EqualCons=do.call("rbind",lapply(Output,function(x) x$GeneLevelEstimatesConstProbesets))	
+#				assign(paste("EventPointer_REIDS_Output_EqualConst",sep=""),EqualCons,envir=environment())
+#				save(EventPointer_REIDS_Output_WeightedConst, file="EventPointer_REIDS_Output_EqualConst.RData")
+			}
+		}
+
+		file.remove(paste(Location,REIDSOutputFiles,sep="/"))
+		
 	}
 	
-	assign(paste(Name,"_REIDS_Output",sep=""),Output,envir=environment())
-	eval(parse(text=paste("save(",Name, "_REIDS_Output, file=\"",Location,"/",Name, "_REIDS_Output.RData\")", sep=""))) 
+	REIDSIsoFiles=list.files(path=Location,pattern="^REIDS_IsoformInfo_")
+	if(length(REIDSIsoFiles)>0){
+		Output=list()
+		for(i in as.character(ID)){
+			Data=try(get(load(paste(Location,"/REIDS_IsoformInfo_",as.character(i),".RData",sep=""))),silent=TRUE)
+			if(class(Data)!="try-error"){
+				Output[length(Output)+1]=Data
+				names(Output)[length(Output)]=i
+			}
+		}
+		
+		assign(paste(Name,"_REIDS_IsoformInfo",sep=""),Output,envir=environment())
+		eval(parse(text=paste("save(",Name, "_REIDS_IsoformInfo, file=\"",Location,"/",Name, "_REIDS_IsoformInfo.RData\")", sep=""))) 
+		
+		for(l in 1:length(Output)){
+			utils::write.table(t(c("TC_ID","PSR_ID","Type","Unreliable Junctions","Linking Junctions","Exclusion Junctions","Supported by","Identified by","Fold Change","Exons")), file = paste(Location,"/",Name,"_ASInfo.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID","TranscriptName","Junctions","ProbeSets")), file = paste(Location,"/",Name,"_Compositions.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			utils::write.table(t(c("TC_ID","TranscriptName",paste("Present in Group",c(1:length(Groups))))), file = paste(Location,"/",Name,"_GroupTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			
+			if(class(Output[[l]]$"TranscriptInformation")!="character"&!is.null(Output[[l]]$"TranscriptInformation")){
+				
+				if(!is.null(Output[[l]]$"TranscriptInformation"[[1]])){
+					utils::write.table(Output[[l]]$"TranscriptInformation"[[1]], paste(Location,"/",Name, "_ASInfo.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+				if(!is.null(Output[[l]]$"TranscriptInformation"[[2]])){
+					utils::write.table(Output[[l]]$"TranscriptInformation"[[2]], paste(Location,"/",Name, "_Compositions.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+					
+				}
+				if(!is.null(Output[[l]]$"TranscriptInformation"[[3]])){
+					utils::write.table(Output[[l]]$"TranscriptInformation"[[3]], paste(Location,"/",Name, "_GroupTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+				if(!is.null(Output[[l]]$"TranscriptInformation"[[4]])){
+					utils::write.table(t(c(names(Output)[l],Output[[l]]$"TranscriptInformation"[[4]])), paste(Location,"/",Name, "_NovelConnections.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+#				if(!is.null(Output[[l]]$"IsoformIndication")){
+#					utils::write.table(cbind(names(Output)[l],Output[[l]]$"IsoformIndication"),file = paste(Location,"/",Name, "_IsoformIndication.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+#				}
+#				if(!is.null(Output[[l]]$"ExonTesting")){
+#					utils::write.table(cbind(names(Output)[l],Output[[l]]$"ExonTesting"),file = paste(Location,"/",Name, "_ExonDE.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+#					
+#				}
+#				if(!is.null(Output[[l]]$"Possible DE Isoforms")){
+#					utils::write.table(cbind(names(Output)[l],Output[[l]]$"Possible DE Isoforms"[[2]]),file = paste(Location,"/",Name, "_PossibleDEIsoforms.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)				
+#				}
+			}
+			else{
+				if(is.null(Output[[l]]$"TranscriptInformation")){
+					utils::write.table(t(c(names(Output)[l],"Transcript not assessed")), paste(Location,"/",Name, "_NotAssessedTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+					
+				}
+				else{
+					utils::write.table(t(c(names(Output)[l],Output[[l]]$"TranscriptInformation")), paste(Location,"/",Name, "_NotAssessedTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+				}
+			}
+		}
+	}
 }
 
 
@@ -639,13 +1027,19 @@ CreateOutput<-function(ID,Name,Location=""){
 #' @param file_name The name of the pivot transformed .csv file.
 #' @param file_pos The position in the file where to start reading.
 #' @param line_length The length of the line to read.
-#' @param nsim The number of iterations to perform.
+#' @param ASPSR A vector with alternatively spliced probe sets which are taken out of the analysis and summarization. This is useful if Summarize is "WeightedConst" and/or "EqualConst".
+#' @param Summarize A character vector specifying wich summarization method is to be performed. The choices are "EqualAll", "WeightedAll", "EqualConst" and "WeightedConst". The former two use all probe sets while the latter use only the constituitive probe sets. Summarization on the constistuitive probe sets will only be performed if ASPSR is specified.
+#' @param nsim The number of iterations to perform. Defaults to 1000.
 #' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
 #' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
 #' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
 #' @param Location A character string indication the place where the output should be saved.
-#' @return An .RData file for each gene with the values returned by the iniREIDS and REIDS functions.
-reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informativeCalls=TRUE,rho=0.5,Low_AllSamples,Location){
+#' @param Name A name for the output to be saved at Location. Defaults to "REIDS". 
+#' @return The functions writes the obtained information to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt". 
+reidsfunction_genebygene <- function(file_name,file_pos,line_length,ASPSR=c(),nsim=1000,informativeCalls=TRUE,Summarize=FALSE,rho=0.5,Low_AllSamples=c(),Location=NULL,Name="REIDS"){
+	file_pos=as.numeric(as.matrix(file_pos))
+	line_length=as.numeric(as.matrix(line_length))
+	
 	conn <- file(file_name, 'rb')
 	current.pos <- seek(conn, where = file_pos, origin = 'start')
 	data <- readBin(conn, 'raw', n = line_length)
@@ -659,10 +1053,12 @@ reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informa
 	d[5]=substr(d[5],start=1,stop=nchar(d[5])-1)
 	
 	if(d[1]!="GeneID"){
-		
 		geneID=as.character(d[1])
 		if(length(strsplit(geneID,"\n")[[1]])==2){
 			geneID=strsplit(geneID,"[\n\"]")[[1]][3]
+		}
+		if(length(strsplit(geneID,"\"")[[1]])==2){
+			geneID=strsplit(geneID,"[\"]")[[1]][2]
 		}
 		exonID=as.character(unlist(strsplit(d[2],",")))
 		lengthexons=as.integer(unlist(strsplit(d[3],",")))
@@ -689,7 +1085,13 @@ reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informa
 		geneData=data.frame(lapply(geneData, as.character), stringsAsFactors=FALSE)
 		geneData=cbind(geneData,TempData)
 
-	
+		if(length(ASPSR)>0){
+			AS=which(geneData[,2]%in%ASPSR)
+			if(length(AS)>0){
+				geneData=geneData[-c(AS),,drop=FALSE]
+			}
+		}
+		
 		DABGs=which(geneData[,2]%in%Low_AllSamples)
 		if(length(DABGs)>0){
 			geneData=geneData[-c(which(geneData[,2]%in%Low_AllSamples)),,drop=FALSE]
@@ -711,37 +1113,176 @@ reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informa
 		names(enames)=NULL
 		
 		rownames(lcmmData)<- enames
-			
-			##informative calls
-			i=1
-			if(informativeCalls){			
-				fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
-				fit2 <- data.frame(exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level,no replicates
-				output[[1]][[i]]=fit2
-				names(output[[1]])[i]="Informative"
-				iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
-				lcmmData <-  iniData   
-				i=i+1
-			}
-			
-			
-			if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>1){  
-				fit <- REIDSmodel_intern(SubgeneData=lcmmData, nsim) 
-				exonScore <-fit$exonScores
-				arrayScore <- fit$arrayScores
-				output[[1]][[i]]=exonScore
-				names(output[[1]])[i]="exonScore"
-				output[[1]][[i+1]]=arrayScore
-				names(output[[1]])[i+1]="arrayScore"
-			}
-			
 		
-		save(output, file=paste(Location,"/REIDS_Gene_", geneID, ".RData", sep=""))
-		rm(output)
-		gc()
-	}	
+		##informative calls
+		i=1
+		if(informativeCalls&length(ASPSR)==0){			
+			fit <- iniREIDS(SubgeneData=lcmmData, nsim) 
+			fit2 <- data.frame(geneID=geneID,exonNames=unique(enames),Score=fit,informative=fit>rho) # iniREIDS returns one value per exon: filtering on exon level,no replicates
+			output[[1]][[i]]=fit2
+			names(output[[1]])[i]="Informative"
+			iniData <- lcmmData[which(rownames(lcmmData)%in%fit2$exonNames[fit2$informative]),] # Of those that pass filtering step, retrieve the replicates and samples
+			lcmmData <-  iniData   
+			i=i+1
+			
+			if(!is.null(Location)){
+				utils::write.table(fit2, paste(Location,"/",Name,"_INICalls.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			}
+		}
+		
+			
+		if(!is.null(lcmmData)&length(unique(rownames(lcmmData)))>=3){  
+			fit <- REIDSmodel_intern(SubgeneData=lcmmData, nsim) 
+			
+			exonScore <-fit$exonScores
+			arrayScore <- fit$arrayScores
+			
+			if(length(ASPSR)==0){
+				output[[1]][[i]]=cbind(geneID,rownames(arrayScore),exonScore)
+				names(output[[1]])[i]="exonScore"
+				utils::write.table(cbind(geneID,rownames(arrayScore),exonScore), paste(Location,"/",Name,"_ExonScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			
+				output[[1]][[i+1]]=cbind(geneID,rownames(arrayScore),arrayScore)
+				names(output[[1]])[i+1]="arrayScore"
+				i=i+2
+				if(!is.null(Location)){
+					utils::write.table(cbind(geneID,rownames(arrayScore),arrayScore), paste(Location,"/",Name,"_ArrayScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+			}
+			
+			if(any(c("EqualAll","WeightedAll")%in%Summarize)&length(ASPSR)==0){
+				exonVariances<-fit$exonVar	
+				probeEffects<-fit$probeEffects
+				sampleEffects<-fit$sampleEffects
+				estimatedvalues<-fit$arrayScores
+				
+				if("WeightedAll"%in%Summarize){## with weights
+					TotalExonVar=sum(1/exonVariances)
+					Weights=(1/exonVariances)/TotalExonVar
+					names(Weights)=unique(rownames(lcmmData))
+					
+					arrayLevels=apply(estimatedvalues,2,function(j) sum(Weights*j))
+					
+					WeightedGeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+					
+					output[[1]][[i]]=Weights
+					names(output[[1]])[i]="WeightsAllProbesets"
+					
+					output[[1]][[i+1]]=c(geneID,WeightedGeneLevelEstimates)
+					names(output[[1]])[i+1]="WeightedAll"
+					if(!is.null(Location)){
+						utils::write.table(t(c(geneID,WeightedGeneLevelEstimates)), paste(Location,"/",Name,"_WeightedAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+					}
+				}
+				if("EqualAll"%in%Summarize){
+					
+					## without weights		
+					arrayLevels=apply(estimatedvalues,2,mean)
+					GeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+					
+					output[[1]][[i+2]]=c(geneID,GeneLevelEstimates)
+					names(output[[1]])[i+2]="EqualAll"
+					if(!is.null(Location)){
+						utils::write.table(t(c(geneID,GeneLevelEstimates)), paste(Location,"/",Name,"_EqualAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+					}
+				}
+				i=i+3
+				
+				#ExonLevelValues
+				
+				ProbeLevel=matrix(probeEffects)
+				rownames(ProbeLevel)=geneData[,2]
+				PSR=unique(geneData[,2])
+				ExonLevelEstimates=matrix(0,nrow=length(PSR),ncol=length(sampleEffects))
+				for(e in 1:length(PSR)){
+					E=mean(ProbeLevel[which(rownames(ProbeLevel)==PSR[e]),])+sampleEffects+estimatedvalues[which(rownames(estimatedvalues)==PSR[e]),]
+					ExonLevelEstimates[e,]=E
+				}
+				rownames(ExonLevelEstimates)=PSR
+				
+				output[[1]][[i]]=cbind(geneID,PSR,ExonLevelEstimates)
+				names(output[[1]])[i]="ExonLevel"
+				i=i+1
+				if(!is.null(Location)){
+					utils::write.table(cbind(geneID,PSR,ExonLevelEstimates), paste(Location,"/",Name,"_ExonLevel.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+				
+			}
+			if(any(c("EqualConst","WeightedConst")%in%Summarize)&length(ASPSR)>0){
+				exonVariances<-fit$exonVar	
+				names(exonVariances)=unique(rownames(lcmmData))
+				probeEffects<-fit$probeEffects
+				sampleEffects<-fit$sampleEffects
+				estimatedvalues<-fit$arrayScores
+				
+				if("WeightedConst"%in%Summarize){## with weights
+					TotalExonVar=sum(1/exonVariances)
+					Weights=(1/exonVariances)/TotalExonVar
+					names(Weights)=unique(rownames(lcmmData))
+					
+					arrayLevels=apply(estimatedvalues,2,function(j) sum(Weights*j))
+					
+					WeightedGeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+					
+					output[[1]][[i]]=Weights
+					names(output[[1]])[i]="WeightsConstProbesets"
+					
+					output[[1]][[i+1]]=c(geneID,WeightedGeneLevelEstimates)
+					names(output[[1]])[i+1]="WeightedConst"
+					if(!is.null(Location)){
+						utils::write.table(t(c(geneID,WeightedGeneLevelEstimates)), paste(Location,"/",Name,"_WeightedConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+					}
+				}
+				if("EqualConst"%in%Summarize){
+					
+					## without weights		
+					arrayLevels=apply(estimatedvalues,2,mean)
+					GeneLevelEstimates=mean(probeEffects)+sampleEffects+arrayLevels
+					
+					output[[1]][[i+2]]=c(geneID,GeneLevelEstimates)
+					names(output[[1]])[i+2]="EqualConst"
+					if(!is.null(Location)){
+						utils::write.table(t(c(geneID,GeneLevelEstimates)), paste(Location,"/",Name,"_EqualConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+					}
+				}
+				i=i+3
+				
+				#ExonLevelValues
+				
+				ProbeLevel=matrix(probeEffects)
+				rownames(ProbeLevel)=geneData[,2]
+				PSR=unique(geneData[,2])
+				ExonLevelEstimates=matrix(0,nrow=length(PSR),ncol=length(sampleEffects))
+				for(e in 1:length(PSR)){
+					E=mean(ProbeLevel[which(rownames(ProbeLevel)==PSR[e]),])+sampleEffects+estimatedvalues[which(rownames(estimatedvalues)==PSR[e]),]
+					ExonLevelEstimates[e,]=E
+				}
+				rownames(ExonLevelEstimates)=PSR
+				
+				output[[1]][[i]]=cbind(geneID,PSR,ExonLevelEstimates)
+				if(length(AS)==0){
+					names(output[[1]])[i]="ExonLevel"
+					i=i+1
+				}
+				else{
+					names(output[[1]])[i]="ExonLevel_Const"
+					i=i+1
+				}				
+			}
+		}
+		
+		#save(output, file=paste(Location,"/REIDS_Gene_", geneID, ".RData", sep=""))
+		#rm(output)
+		#gc()
 	
-	close(conn)
+		close(conn)
+		if(!is.null(Location)){
+			return(output)
+		}
+	}
+	else{
+		close(conn)
+	}
 }
 
 
@@ -749,453 +1290,209 @@ reidsfunction_genebygene <- function(file_name,file_pos,line_length,nsim,informa
 #' 
 #' The REIDSFunction performs the REIDS model on the pivot transformed data by calling on the line indexed file. The REIDS model is performed gene by gene and the returned outputs are knitted together.
 #' @export
-#' @param geneIDs A data frame with a "geneID" column.
-#' @param Name A name for the returned list.
-#' @param Indices The .csv file created by Line_Indexer.py which contains indices for every gene.
+#' @param ASPSR A vector with alternatively spliced probe sets which are taken out of the analysis and summarization. This is useful if Summarize is "WeightedConst" and/or "EqualConst".
+#' @param Indices The .csv file created by Line_Indexer.py which contains indices for every gene in geneIDs.
 #' @param DataFile The .csv file created by PivotTransformation. 
-#' @param nsim The number of iterations to perform.
+#' @param nsim The number of iterations to perform. Defaults to 1000.
 #' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
+#' @param Summarize A character vector specifying wich summarization method is to be performed. The choices are "EqualAll", "WeightedAll", "EqualConst" and "WeightedConst". The former two use all probe sets while the latter use only the constituitive probe sets. Summarization on the constistuitive probe sets will only be performed if ASPSR is specified.
 #' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
+#' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
 #' @param Location A character string indication the place where the outputs are saved.
-#' @return A list with an element for each gene with per gene the values returned by the iniREIDS and REIDS functions.
-REIDSFunction<-function(geneIDs,Name,Indices,DataFile,nsim=5000,informativeCalls=TRUE,rho=0.5,Low_AllSamples,Location){
+#' @param Name A name for the output to be saved at Location. Defaults to "REIDS". 
+#' @return The functions writes the obtained information to .txt files: "Name_INICalls.txt", Name_ExonScores.txt", "Name_ArrayScores.txt" and the summarized values distributed across "Name_WeightedAll.txt", "Name_EqualAll.txt", "Name_WeightedConst.txt" and "Name_EqualConst.txt". 
+#' @examples
+#' \dontrun{
+#' data(TC1500264)
+#' PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+#' REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+#' 
+#' REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+#' DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,
+#' Summarize=c("WeightedAll","EqualAll"),
+#' rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),Location="Output",Name="TC1500264")
+#' }
+REIDSFunction<-function(ASPSR=c(),Indices,DataFile,nsim=1000,informativeCalls=TRUE,Summarize=FALSE,rho=0.5,Low_AllSamples=c(),Groups,Location=NULL,Name="REIDS"){
 	Lines=utils::read.table(Indices,header=TRUE,sep=",",stringsAsFactors=FALSE)
 	Lines=data.frame(Lines)	
 	Lines[,1]=as.numeric(Lines[,1])
 	Lines[,2]=as.numeric(Lines[,2])
+
+	if(!is.null(Location)){
+		Files=list.files(path=Location,pattern=paste("^",Name,sep=""))	
+		if(!paste(Name,"_INICalls.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","PSR_ID","Informative")), file = paste(Location,"/",Name,"_INICalls.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_ExonScores.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","PSR_ID","ExonScore")), file = paste(Location,"/",Name,"_ExonScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_ArrayScores.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","PSR_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_ArrayScores.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_WeightedAll.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_WeightedAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_EqualAll.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_EqualAll.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_WeightedConst.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_WeightedConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_EqualConst.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_EqualConst.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_ExonLevel.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","PSR_ID",paste("Sample",c(1:length(unlist(Groups)))))), file = paste(Location,"/",Name,"_ExonLevel.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+	}
+	REIDSOut=apply(Lines,1, function(x) reidsfunction_genebygene(file_name=DataFile,file_pos=x[1],line_length=x[2],ASPSR,nsim,informativeCalls,Summarize,rho,Low_AllSamples,Location,Name))
 	
-	REIDSOut=apply(Lines,2, function(x) reidsfunction_genebygene(file_name=DataFile,file_pos=x[1],line_length=x[2],nsim,informativeCalls,rho,Low_AllSamples,Location))
-	
-	CreateOutput(ID=geneIDs,Name,Location)
+	#CreateOutput(ID=geneIDs,Name,Location)
 }
 
 ##### OUTPUT ANALYSIS FUNCTIONS #####
 
-#FILTERING FUNCTION
-
-#' "FilterInformativeGenes"
-#'
-#' The FilterInformativeGenes function works on the list returned by the REIDS functions. It returns a list that only retains the genes that have informative probesets.
-#' @export 
-#' @param Data The output of the REIDS function.
-#' @return A subset of the list provided in Data.
-#' @examples
-#' data(TC12000010_REIDS_Output)
-#' Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
-FilterInformativeGenes <- function(Data){
-	Out1=list()
-	filter <- function(Subset){
-		if("exonScore"%in% names(Subset)){
-			return(Subset)
-		}
-	}
-	Out1=lapply(Data,filter)
-	
-	Out2=Out1[vapply(Out1, Negate(is.null), NA)]
-	
-	return(Out2)
-}
-
-
-#SEARCH FUNCTION
-
-#' "Search"
-#' 
-#' The Search function investigates whether specific genes and/or exons are present in the data. It returns the elements of the found elements and a list of those that were not found.
-#' @export 
-#' @param WhatToLookFor A data frame with a GeneID and ExonID column. Only the ExonID column is necessary, the corresponding gene ID will be sought in the data
-#' @param Data The data in which the given gene and exon ID should be sought.
-#' @param AggregateResults Logical. Should the results be aggregated on gene level? This results in a list with one item per gene
-#' @param NotFound Not be specified by the user.
-#' @return The returned value is a list with two elements. The first element is SearchResults which contains a list of the found instances in the data. The list contains an element per found instance. If AggregateResults is TRUE, the list is reduced to an element per gene. The secod is a data frame calles NotFound which contain the gene and exon ID which were not found in the data. If only exon ID were specified, the gene ID are NA in this data frame.
-#' @examples
-#' data(TC12000010_REIDS_Output)
-#' Test_F=FilterInformativeGenes(TC12000010_REIDS_Output)
-#' Test_S=Search(WhatToLookFor=data.frame(ExonID=c("PSR12000150")),Data=Test_F,
-#' AggregateResults=FALSE,NotFound=NULL)
-Search <- function(WhatToLookFor=data.frame(GeneID=NULL,ExonID=NULL), Data, AggregateResults=FALSE,NotFound=NULL){
-	if(!(is.null(WhatToLookFor$GeneID))){
-		
-		if(is.null(NotFound)){
-			NotFound<-data.frame(GeneID=integer(),ExonID=integer())
-		}
-		
-		if(class(Data[[1]])=="list"){
-			retrieve<-function(GID,EID,Data){
-				
-				listnumber=which(names(Data)==as.character(GID))
-				
-				if(length(listnumber)==0){
-					NotFound=rbind(NotFound,data.frame(geneID=GID,exonID=EID))
-					#assign("NotFound", notfound, envir = .GlobalEnv)
-					
-					ExonInfo=NULL
-					#return(ExonInfo)
-				}
-				else{
-					SelectGeneData=Data[[listnumber]]
-					
-
-					if(class(SelectGeneData)=="list"){ #here we assume that the data is the direct output of the REIDSfunction
-						
-						if(names(SelectGeneData)[1]=="exonScore"){
-							ExonScore=SelectGeneData$exonScore[which(SelectGeneData$exonScore$exon==EID),,drop=FALSE]
-							ArrayScore=SelectGeneData$arrayScore[which(rownames(SelectGeneData$arrayScore)==EID),,drop=FALSE]	
-							
-							ExonInfo=list(exonScore=ExonScore,arrayScore=ArrayScore)
-						}
-						else{
-							InformativeExon=SelectGeneData$Informative[which(SelectGeneData$Informative$exonNames==EID),,drop=FALSE]
-						
-							if(InformativeExon$informative==TRUE & length(which(SelectGeneData$Informative$informative==TRUE))>1){
-								ExonScore=SelectGeneData$exonScore[which(SelectGeneData$exonScore$exon==EID),,drop=FALSE]
-								ArrayScore=SelectGeneData$arrayScore[which(rownames(SelectGeneData$arrayScore)==EID),,drop=FALSE]
-						
-								ExonInfo=list(Informative=InformativeExon,exonScore=ExonScore,arrayScore=ArrayScore)
-							}
-							else{
-								ExonInfo=list(Informative=InformativeExon)
-							}
-						}
-					
-					}
-					else if(class(SelectGeneData)=="data.frame"){
-						ExonInfo=SelectGeneData[which(SelectGeneData$ExonID==EID),,drop=FALSE]
-					
-						if(nrow(ExonInfo)==0){
-							ExonInfo=NULL
-						
-							NotFound=rbind(NotFound,data.frame(geneID=GID,exonID=EID))
-							#assign("NotFound", notfound, envir = .GlobalEnv)
-						}
-					
-					}
-				}	
-				
-				return(ExonInfo)
-				
-			}
-			
-		}
-		
-		else if(class(Data)=="data.frame"){
-			retrieve<-function(GID,EID,Data){
-				
-				Rownumbers=which(Data$GeneID==GID)
-				if(length(Rownumbers)==0){
-					NotFound=rbind(NotFound,data.frame(geneID=GID,exonID=EID))
-					
-					ExonInfo=NULL
-
-				}
-				else{
-					
-					SelectGeneData=Data[Rownumbers,]
-					
-					ExonInfo=SelectGeneData[which(as.character(SelectGeneData$ExonID)==as.character(EID)),,drop=FALSE]
-					
-					if(nrow(ExonInfo)==0){
-						ExonInfo=NULL
-						
-						NotFound=rbind(NotFound,data.frame(geneID=GID,exonID=EID))
-						#assign("NotFound", notfound, envir = .GlobalEnv)
-					}			
-				}
-			
-				return(ExonInfo)		
-			}
-		}
-		
-		Out1=lapply(1:nrow(WhatToLookFor),function(x) retrieve(GID=as.character(WhatToLookFor[x,1]),EID=as.character(WhatToLookFor[x,2]),Data = Data))
-		names(Out1)=WhatToLookFor$GeneID
-		Out2=Out1[vapply(Out1, Negate(is.null), NA)]
-		
-		SearchResults=Out2
-		
-		if(AggregateResults==TRUE){
-			message("Results are aggregated on the gene level...")
-			
-			genes=unique(names(Out2))
-			
-			aggregate<-function(gene,Data){
-				if(class(Data[[1]])=="data.frame"){  #assume a data.frame per gene
-					Out3=rbindlist(Data)
-					Out3=as.data.frame(Out3)
-				}
-				else if(class(Data[[1]])=="list"){ #assume a list of data frames per gene
-					
-					ntables=max(sapply(Data, length))
-					
-					aggregatetables<-function(data){
-						data=lapply(data,as.data.frame)
-						Out4=rbindlist(data)
-						Out4=as.data.frame(Out4)
-						return(Out4)					 
-					}
-					
-					Out3=lapply(1:ntables,function(i) aggregatetables(data=lapply(Data,function(x) ifelse(length(x)>=i,x[i],x[NA]))))	
-					names(Out3)=names(Data[[ which(sapply(Data,length)==max(sapply(Data, length)))[1]]])
-					
-				}
-				
-				return(Out3)
-				
-			}
-			
-			Out5=lapply(1:length(genes),function(x) aggregate(gene = genes[x], Data=Out2[which(names(Out2)==genes[x])]))
-			names(Out5)=genes
-			
-			SearchResults=Out5
-			
-		}
-		
-		
-	}
-	
-	else if(is.null(WhatToLookFor$GeneID) & !(is.null(WhatToLookFor$ExonID))){
-		
-		if(class(Data[[1]])=="list"){
-			
-			if(names(Data[[1]])[1]=="exonScore"){
-				ExonNames=lapply(1:length(Data),function(x) as.character(Data[[x]]$exonScore$exon))
-			}
-			else{
-				ExonNames=lapply(1:length(Data),function(x) as.character(lapply(Data[x],"[[",1)[[1]]$exonNames))
-			}
-			
-			names(ExonNames)=names(Data)		
-			GeneNames=sapply(1:length(ExonNames),function(i) rep(names(ExonNames)[i],length(ExonNames[[i]])))			
-			GenesAndExons=data.frame(GeneID=as.character(unlist(GeneNames)),ExonID=as.character(unlist(ExonNames)))
-			
-			exons=WhatToLookFor$ExonID
-			
-			LookFor=lapply(exons, function(x) GenesAndExons[which(as.character(GenesAndExons$ExonID)==x),])			
-			LookFor=as.data.frame(rbindlist(LookFor))
-			
-			exons_notfound=exons[which(!exons%in%LookFor$ExonID)]
-			
-			if(length(exons_notfound)==0){
-				NF=NULL
-			}
-			else{
-				NF=data.frame(GeneID=rep(NA,length(exons_notfound)),ExonID=exons_notfound)
-			}
-			
-		}
-		else if(class(Data)=="data.frame"){
-			
-			#ExonNames=lapply(1:length(Data),function(x) Data[x][[1]]$ExonID)
-			ExonNames=Data$ExonID
-			GeneNames=Data$GeneID
-		
-			
-			#GeneNames=sapply(1:length(ExonNames),function(i) rep(names(ExonNames)[i],length(ExonNames[[i]])))			
-			#GenesAndExons=data.frame(geneID=as.integer(unlist(GeneNames)),exonID=as.integer(unlist(ExonNames)))
-			GenesAndExons=data.frame(GeneID=GeneNames,ExonID=ExonNames)
-			exons=WhatToLookFor$ExonID
-			
-			LookFor=lapply(exons, function(x) ifelse(nrow(GenesAndExons[which(GenesAndExons$ExonID==x),])!=0,return(GenesAndExons[which(GenesAndExons$ExonID==x),]),return(data.frame(GeneID="NA",ExonID=x))))
-			LookFor=as.data.frame(rbindlist(LookFor))
-			LookFor$GeneID=suppressWarnings(as.integer(as.character(LookFor$GeneID)))
-			exons_notfound=LookFor[which(is.na(LookFor$GeneID)),]
-			LookFor=LookFor[-which(is.na(LookFor$GeneID)),]
-			
-			if(nrow(exons_notfound)==0){
-				NF=NULL
-			}
-			else{
-				NF=exons_notfound
-			}
-			
-		}
-		
-		return(Search(WhatToLookFor=LookFor, Data=Data, AggregateResults=AggregateResults,NotFound=NF))
-	}
-	
-	NMatched=length(Out2)
-	message(paste(NMatched," instances found in the Data..."))
-	return(list("SearchResults"=SearchResults,"NotFound"=NotFound))
-}
-
 
 #' "ExonTesting"
 #' 
-#' The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) on the array score of predefined groups. If specified, probesets are filtered out on exon scores and test significance.
+#' The ExonTesting function performs a t-test (2 groups) or F-test (more than 2 groups) between the array scores of predefined groups. If specified, probe sets are filtered out on exon scores and significance level. The function is the internal function of ASExons.
 #' @export
-#' @param Data The Data on which testing of the array scores should be conducted. This is preferably output of the REIDS function
-#' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
+#' @param ExonScores The path to the file with the exon scores of the probe sets.
+#' @param ArrayScores The path to the file with the array scores of the probe sets.
+#' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probe sets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
 #' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param paired Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.
 #' @param significancelevel The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.
-#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
-#' @examples
-#' data(TC12000010_REIDS_Output)
-#' ExonTest=ExonTesting(Data=TC12000010_REIDS_Output,Exonthreshold=NULL,Groups=list(c(1:9),c(10:18)),
-#' paired=FALSE,significancelevel=NULL)
-ExonTesting <- function(Data, Exonthreshold=NULL,Groups=list(),paired=FALSE,significancelevel=NULL){
-	
+#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the exon score, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. The p-values are adjusted for multiplicity and filtered on significance if significancelevel is not NULL.
+ExonTesting <- function(ExonScores,ArrayScores,Exonthreshold=NULL,Groups=list(),paired=FALSE,significancelevel=NULL){
+
 	if(is.null(Exonthreshold)){
 		Exonthreshold=0
 	}
 	
-	if(is.null(Groups[[1]])){
-		message("A test on the array scores will NOT be performed")
-	}
+	## Step 1 : filtering on the Exon value. If 0, no filtering occurs
+	SubsetExonScores=ExonScores[which(round(ExonScores[,3],2)>Exonthreshold),,drop=FALSE]
+	Exons=unique(SubsetExonScores[,2])
 	
-	message("Data is filtered to only contain genes with informative exons")
-	Data_Filtered1=FilterInformativeGenes(Data)  #only those genes with informative exons remain
+	## Step 2 : Testing of the Array Scores -- paired or not paired
+	ArrayScoreTTest=matrix(0,nrow=length(Exons),ncol=3)
+	colnames(ArrayScoreTTest)=c("statistic","p.value","adj.p.value")
 	
-	
-	filterASExons<-function(i,geneID,Subset,Exon,groups,pairing){
-		
-		## Step 1 : filtering on the Exon value. If 0, no filtering occurs
-		ExonsExon = Subset$exonScore
-		ArrayScores = Subset$arrayScore
-		
-		SelectExonsExon = ExonsExon[which(ExonsExon$X50>Exon),]
-		ExonsPassedExon = SelectExonsExon$exon
-		
-		SelectRowsArray = which(rownames(ArrayScores)%in%ExonsPassedExon)
-		
-		## Step 2 : Testing of the Array Scores -- paired or not paired
-		if(pairing==FALSE){  # Test between two groups of Array Scores
-			
-			names(groups)=c(1:length(groups))
-			
-			ArrayScoreTTest=matrix(0,nrow=length(SelectRowsArray),ncol=3)
-			colnames(ArrayScoreTTest)=c("statistic","p.value","adj.p.value")
-			rownames(ArrayScoreTTest)=rownames(ArrayScores[SelectRowsArray,])
-			
-			ttest<-function(data,groups,pairs){
-				if(length(groups)==2){
-					C=c(data[,groups[[1]]],data[,groups[[2]]])
-					l1=C>0&C<0.5
-					l2=C<0&C>-0.5
-					l=l1+l2
-					if(length(which(l==1))>=(0.80*length(l))){
-						out2=c(0,1)
-					}
-					else{	
-						out1=stats::t.test(x=data[,groups[[1]]],y=data[,groups[[2]]],paired=pairs)
-						out2=cbind(out1$statistic,out1$p.value)
-						return(out2)	
-					}
-				}
-				else{
-					C=c(data[,groups[[1]]])
-					l=C>0&C<0.5
-					if(length(which(l==1))>=(0.80*length(l))){
-						out2=c(0,1)
-					}
-					else{
-						out1=stats::t.test(x=data[,groups[[1]]])
-						out2=cbind(out1$statistic,out1$p.value)
-						return(out2)
-					}
-				}
-			}
-			
-			anovaFtest<-function(data,Groups){
-				fit<-stats::aov(as.vector(data)~Groups)
-				out1=cbind(summary(fit)[[1]][1,4],summary(fit)[[1]][1,5])	
-				return(out1)
-				
-			}
-			
-			
-			if(length(groups)<=2){
-				ArrayScoreTTest[,c(1,2)] = t(sapply(SelectRowsArray,function(i) {ttest(data=ArrayScores[i,,drop=FALSE],groups=groups, pairs = paired)}))	
+	ttest<-function(data,groups,pairs){
+		if(length(groups)==2){
+			C=c(data[,groups[[1]]],data[,groups[[2]]])
+			l1=C>0&C<0.5
+			l2=C<0&C>-0.5
+			l=l1+l2
+			if(length(which(l==1))>=(0.80*length(l))){
+				out2=c(0,1)
 			}
 			else{
-				Groups=rep(0,length(unlist(groups)))
-				for(j in 1:length(groups)){
-					positions=groups[[j]]
-					Groups[positions]=names(groups)[j]
-				}
-				Groups=as.numeric(Groups)
-				Groups=factor(Groups)
-				
-				ArrayScoreTTest[,c(1,2)] = t(sapply(SelectRowsArray,function(i) {anovaFtest(data=ArrayScores[i,,drop=FALSE],Groups=Groups)}))	
-				
+				#out1=ks.test(x=as.numeric(data[,groups[[1]]]),y=as.numeric(data[,groups[[2]]]))
+				out1=stats::t.test(x=data[,groups[[1]]],y=data[,groups[[2]]],paired=pairs)
+				out2=cbind(out1$statistic,out1$p.value)
+				return(out2)	
 			}
-			p_vals=as.vector(as.matrix((ArrayScoreTTest[,grep("^(p.value)",colnames(ArrayScoreTTest))])))
-			adj_p_vals=matrix(stats::p.adjust(p_vals,"BH"),nrow=nrow(ArrayScoreTTest),ncol=length(grep("^(p.value)",colnames(ArrayScoreTTest))))
-			ArrayScoreTTest[,which(seq(1,ncol(ArrayScoreTTest))%%3==0)]=adj_p_vals
-			
-			ArrayScoreTTest=as.data.frame(ArrayScoreTTest)
-			
-		}
-		else if(pairing==TRUE){ # Test the mean paired difference against zero
-			
-			
-			if(!(is.null(groups[[1]])) & length(SelectRowsArray)!=0){
-				
-				ArrayScore_group1=ArrayScores[SelectRowsArray,groups[[1]],drop=FALSE]
-				ArrayScore_group2=ArrayScores[SelectRowsArray,groups[[2]],drop=FALSE]
-				
-				mean_paired_diff<-function(g1,g2){
-					Paired_Diff=g1-g2
-					Mean_Diff=mean(Paired_Diff)
-					
-					out1=stats::t.test(x=Paired_Diff)
-					out2=cbind(out1$statistic,out1$p.value)
-					out3=cbind(Mean_Diff,out2)
-					
-					return(out3)
-				}
-				
-				ArrayScoreTest = t(sapply(c(1:length(ExonsPassedExon)),function(i) mean_paired_diff(g1=ArrayScore_group1[i,],g2=ArrayScore_group2[i,]) ))
-				ArrayScoreTest=data.frame("Mean_Diff"=ArrayScoreTest[,1],"t-statistic"=ArrayScoreTest[,2],p.value=ArrayScoreTest[,3])
-				rownames(ArrayScoreTest)=rownames(ArrayScore_group1)
-				
-				
-			}
-			else{
-				ArrayScoreTest = NULL
-			}
-		}	
-		
-		if(!is.null(ArrayScoreTTest)){
-			Output=cbind("geneID"=rep(geneID,length(ExonsPassedExon)), SelectExonsExon,ArrayScoreTTest)	
 		}
 		else{
-			Output=cbind("geneID"=rep(geneID,length(ExonsPassedExon)),SelectExonsExon)
+			C=c(data[,groups[[1]]])
+			l=C>0&C<0.5
+			if(length(which(l==1))>=(0.80*length(l))){
+				out2=c(0,1)
+			}
+			else{
+				out1=stats::t.test(x=data[,groups[[1]]])
+				out2=cbind(out1$statistic,out1$p.value)
+				return(out2)
+			}
 		}
-		
-		colnames(Output)[2]="ExonID"
-		
-		if(nrow(Output)==0){
-			Output=NULL
-		}
-		
-		return(Output)
+	}
+	
+	anovaFtest<-function(data,Groups){
+		fit<-stats::aov(as.vector(data)~Groups)
+		out1=cbind(summary(fit)[[1]][1,4],summary(fit)[[1]][1,5])	
+		return(out1)
 		
 	}
 	
-	Out1=lapply(1:length(Data_Filtered1), function(i) filterASExons(i,geneID = names(Data_Filtered1[i]), Subset = Data_Filtered1[[i]], Exon = Exonthreshold , groups=Groups, pairing = paired))
-	names(Out1)=names(Data_Filtered1)
 	
-	Out2=Out1[vapply(Out1, Negate(is.null), NA)]
-	
-	Out3<-do.call(rbind.data.frame, Out2)
-	
-	
-	
-	## Step 3 : if Exon threshold specified: we adjust for multiplicity ;  filter on significance level 
-	if(nrow(Out3)!=0){
-		message("The p-value are adjusted")
-		if(!is.null(Out3$p.value)){
-			Out3$adj.p.value=stats::p.adjust(Out3$p.value,"fdr")
-		}	
-		if(!is.null(significancelevel)){
-			Out3=Out3[which(Out3$adj.p.value<=significancelevel),]
+	if(paired==FALSE){  # Test between two groups of Array Scores
+		
+		names(Groups)=c(1:length(Groups))
+
+		if(length(Groups)<=2){
+			ArrayScoreTTest[,c(1,2)] = t(sapply(Exons,function(i) {ttest(data=ArrayScores[which(ArrayScores[,2]==i),-c(1,2)],groups=Groups, pairs = paired)}))	
 		}
-		rownames(Out3)=seq(1:nrow(Out3))
+		else{
+			groups=rep(0,length(unlist(Groups)))
+			for(j in 1:length(Groups)){
+				positions=Groups[[j]]
+				groups[positions]=names(Groups)[j]
+			}
+			groups=as.numeric(groups)
+			groups=factor(groups)
+			
+			ArrayScoreTTest[,c(1,2)] = t(sapply(Exons,function(i) {anovaFtest(data=ArrayScores[which(ArrayScores[,2]==i),-c(1,2),drop=FALSE],Groups=groups)}))	
+			
+		}
+		p_vals=as.vector(as.matrix((ArrayScoreTTest[,grep("^(p.value)",colnames(ArrayScoreTTest))])))
+		adj_p_vals=matrix(stats::p.adjust(p_vals,"BH"),nrow=nrow(ArrayScoreTTest),ncol=length(grep("^(p.value)",colnames(ArrayScoreTTest))))
+		ArrayScoreTTest[,which(seq(1,ncol(ArrayScoreTTest))%%3==0)]=adj_p_vals
+		
+		ArrayScoreTTest=as.data.frame(ArrayScoreTTest)
+		Out=cbind(SubsetExonScores,ArrayScoreTTest)
+		
 	}
 	
-	return(Out3)
+	else if(paired==TRUE){
+		if(!(is.null(groups[[1]])) & length(Exons)!=0){
+			
+			ArrayScore_group1=ArrayScores[which(ArrayScores[,2]%in%Exons),groups[[1]]+2,drop=FALSE]
+			ArrayScore_group2=ArrayScores[which(ArrayScores[,2]%in%Exons),groups[[2]]+2,drop=FALSE]
+			
+			mean_paired_diff<-function(g1,g2){
+				Paired_Diff=g1-g2
+				Mean_Diff=mean(Paired_Diff)
+				
+				out1=stats::t.test(x=Paired_Diff)
+				out2=cbind(out1$statistic,out1$p.value)
+				out3=cbind(Mean_Diff,out2)
+				
+				return(out3)
+			}
+			
+			ArrayScoreTest = t(sapply(c(1:length(Exons)),function(i) mean_paired_diff(g1=ArrayScore_group1[i,],g2=ArrayScore_group2[i,]) ))
+			ArrayScoreTest=data.frame("Mean_Diff"=ArrayScoreTest[,1],"t-statistic"=ArrayScoreTest[,2],p.value=ArrayScoreTest[,3])
+			rownames(ArrayScoreTest)=rownames(ArrayScore_group1)
+			Out=cbind(SubsetExonScores,ArrayScoreTTest)
+			
+		}
+		else{
+			Out= NULL
+		}
+	}
 	
+	if(is.null(Out)){
+		Out=SubsetExonScores
+	}
+
+	colnames(Out)[1]="GeneID"
+	colnames(Out)[2]="PSR_ID"
+	colnames(Out)[3]="ExonScore"
+	
+	if(nrow(Out)==0){
+		Out=NULL
+		return(Out)
+	}
+	
+	if(!is.null(significancelevel)&!is.null(Out)){
+		Out=Out[which(Out$adj.p.value<=significancelevel),,drop=FALSE]
+	}
+	if(nrow(Out)>0){
+		rownames(Out)=seq(1:nrow(Out))
+	}
+	return(Out)
 }
 
 
@@ -1203,66 +1500,60 @@ ExonTesting <- function(Data, Exonthreshold=NULL,Groups=list(),paired=FALSE,sign
 
 #' "ASExons"
 #' 
-#' The ASExons functions can be performed either on the output of the REIDS model or on the ExonTesting model and identifies the alternatively spliced exons. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
+#' The ASExons functions alternatively spliced exons from the exon scores and array scores. It filters probesets on their exon scores, adjusts p-values for multiplicity and only keeps the significant probesets.
 #' @export
-#' @param Data The Data on which testing of the array scores should be conducted. This can be either the output of the REIDS model or the ExonTesting function.
-#' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
+#' @param ExonScores The path to the file with the exon scores of the probe sets.
+#' @param ArrayScores The path to the file with the array scores of the probe sets.
+#' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probe sets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
 #' @param Groups A list with elements specifying the columns of the data in each group.
 #' @param paired Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.
 #' @param significancelevel The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.
-#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
+#' @param Location A character string indication the place where the outputs are saved.
+#' @param Name A character string with the name of the ouput file. Defaults to "REIDSAS".
+#' @return A data frame with one line per exon. The columns contain the gene ID, the exon ID, the exon score the test statistic, a p-value and an adjusted p-value. If the groups are paired also the mean paired difference is given. Only the probesets with high enough exon scores and a significant test are kept in the data frame.
 #' @examples 
-#' data(TC12000010_REIDS_Output)
-#' ASTest=ASExons(Data=TC12000010_REIDS_Output,Exonthreshold=0.5,Groups=list(c(1:9),c(10:18)),
+#' \dontrun{
+#' data(TC1500264)
+#' 
+#' PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+#' REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+#' 
+#' REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+#' DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,Summarize=
+#' c("WeightedAll","EqualAll"),rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),
+#' Location="Output",Name="TC1500264")
+#' 
+#' TC1500264_1vs2=ASExons(ExonScores="Output/TC1500264_ExonScores.txt",ArrayScores=
+#' "Output/TC1500264_ArrayScores.txt",Exonthreshold=0.5,Groups=list(c(1:3),c(4:6)),
 #' paired=FALSE,significancelevel=0.05)
-ASExons<-function(Data,Exonthreshold=0.5,Groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=0.05){
+#' }
+ASExons<-function(ExonScores,ArrayScores,Exonthreshold=0.5,Groups=list(group1=NULL,group2=NULL),paired=FALSE,significancelevel=0.05,Location=NULL,Name="REIDSAS"){
 	
-	if(class(Data)=="list"){
-		message("The data is assumed to be output of the REIDS model. Filtering of the probesets and testing of the array scores will be performed")
-		message("The used threshold for the exon scores is 0.5")
-		message("The used significance level for the p-values is 0.05")
+	message("The used threshold for the exon scores is 0.5")
+	message("The used significance level for the p-values is 0.05")
+	
+	ExonScores=utils::read.table(ExonScores,sep="\t",stringsAsFactors=FALSE,header=TRUE,colClasses=c("character","character","numeric"))
+	
+	ArrayScores=utils::read.table(ArrayScores,header=TRUE,sep="\t",stringsAsFactors=FALSE,colClasses=c("character","character",rep("numeric",length(unlist(Groups)))))
 		
-		TestedData=ExonTesting(Data=Data,Exonthreshold=Exonthreshold,Groups=Groups,paired=paired,significancelevel=significancelevel)
+	TestedData=ExonTesting(ExonScores,ArrayScores,Exonthreshold=Exonthreshold,Groups=Groups,paired=paired,significancelevel=significancelevel)
 		
-		if(nrow(TestedData)!=0){
-			message("Ordering data in from high tolow exon scores")
-			Data_Sign_Ordered=TestedData[order(-TestedData$X50.),]
-			rownames(Data_Sign_Ordered)=c(1:nrow(Data_Sign_Ordered))
-		}
-		else{
-			Data_Sign_Ordered=NULL
-		}
-		
+	if(nrow(TestedData)!=0){
+		message("Ordering data in from high to low significance")
+		Data_Sign_Ordered=TestedData[order(TestedData[,ncol(TestedData)]),]
+		rownames(Data_Sign_Ordered)=c(1:nrow(Data_Sign_Ordered))
 	}
-	else if(class(Data)=="data.frame"){
-		
-		message("In using this function please make sure that the data has not been filtered yet and still has unadjusted p-values.")
-		
-		message(paste("Keep probesets with exon score greater than",Exonthreshold,sep=" "))
-		Data_Filt1=Data[which(Data$X50.>Exonthreshold),]
-		
-		if(nrow(Data_Filt1)!=0){
-			message("Adjusting p-values for multiplicity")	
-			Data_Filt1$adj.p.value=stats::p.adjust(Data_Filt1$p.value,"fdr")
-		
-			message(paste("Keep probesets with a p-value lower than",significancelevel,sep=" "))
-			Data_Sign=Data_Filt1[which(Data_Filt1$adj.p.value<significancelevel),]
-
-			if(nrow(Data_Sign)!=0){
-				message("Ordering data in from high to low exon scores")
-				Data_Sign_Ordered=Data_Sign[order(-Data_Sign$X50.),]
-				rownames(Data_Sign_Ordered)=c(1:nrow(Data_Sign_Ordered))
-			}
-			else{
-				Data_Sign_Ordered=NULL
-			}
-
-		}
-		else{
-			Data_Sign_Ordered=NULL
-		}
+	else{
+		Data_Sign_Ordered=NULL
 	}
-	return(Data_Sign_Ordered)
+
+	if(!is.null(Location)){
+		utils::write.table(t(c("TC_ID","PSR_ID","ExonScore","Statistic","Pvalue","Adj.PValue")), file = paste(Location,"/",Name,"_ASTesting.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+		utils::write.table(Data_Sign_Ordered,file=paste(Location,"/",Name,"_ASTesting.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	}
+	else{
+		return(Data_Sign_Ordered)
+	}
 	
 }
 
@@ -1270,32 +1561,1841 @@ ASExons<-function(Data,Exonthreshold=0.5,Groups=list(group1=NULL,group2=NULL),pa
 #' 
 #' JunInfo functions asses the junction information for a single gene
 #' @export
-#' @param x The TC ID for which to retrieve and asses the junction information .
+#' @param file_name The name of the pivot transformed .csv file.
+#' @param file_pos The position in the file where to start reading.
+#' @param line_length The length of the line to read.
 #' @param ASPSR The AS probe sets as identified by ASExons.
-#' @param JLines The lines which contain information on the TC ID in the junction association file.
-#' @param TrLines The lines which contain information on the TC ID in the transcript annotation file.
-#' @param ELines The lines which contain information on the TC ID in the exon annotation file.
-#' @param DataS The TC ID subset of the probe level data.
+#' @param Juninfo A parameter specifying wether the annotations are user of Ensembl defined. If JunInfo is "User" (default) the annotations provided in EandTrAnnot are used. If JunInfo is "Ensembl" the annotations in EandTrAnnot are used to set up tje junction associations but the gene name and position in transcriptData and positionData are used to connect with the Ensembl data base and retrieve corresponding information. 
+#' @param JAnnotI The file name with line indices for the junction associations.
+#' @param JAnnot The file name with the junction associations.
+#' @param EandTrAnnotI The file name with line indices for the exon and isoform annotations.
+#' @param EandTrAnnot The file name with the exon and isoform annotations.
+#' @param PartiallyAnnotated Logical. Should the exon annotations with partially annotated probe sets still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param positionData The file with the chromosome start and ends for the probe sets. Only needed in JunInfo=Ensembl.
+#' @param transcriptData The file with gene name of the transcripts. Only needed in JunInfo=Ensembl.
 #' @param Groups A list with  elements speficifing the columns of the data in each group.
 #' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
 #' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
 #' @param Plot Should a plot of the gene model be made?
+#' @param Location A character string indication the place where the outputs are saved.
 #' @param Name A character string with the name of the ouput file.
 #' @details The plot is produced by the arcplot function of the arcdiagram package (https://github.com/gastonstat/arcdiagram)
-#' @return The function returns three files. The first file has name "Name.txt" and contains a line per probe set. It shows the reached decision
-#' regarding the probe set (const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second
-#' file is a list of all found transcripts for a particular TC I. The third file indicates whether a specific transcript is present or absent in a group.
-JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),Low_GSamples=c(),Plot,Name){
+#' @return The function returns four files. The first file has name "Name_ASInfo.txt" and contains a line per probe set. It shows the reached decision regarding the probe set (Const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second file, "Name_Compositions.txt", is a list of all found transcripts for a particular TC ID. The third file,"Name_GroupTranscripts.txt" indicates whether a specific transcript is present or absent in a group. The fourth file "Name_NovelConnections.txt" contains junctions which are showing an undocumented connection between probe sets.
+JunInfo<-function(file_name,file_pos,line_length,ASPSR=c(),Juninfo="User",JAnnotI,JAnnot=NULL,EandTrAnnotI=NULL,EandTrAnnot=NULL,PartiallyAnnotated=FALSE,positionData=NULL,transcriptData=NULL,Groups=list(),Low_AllSamples=c(),Low_GSamples=c(),Plot=FALSE,Location=NULL,Name=""){
+
+	file_pos=as.vector(as.matrix(file_pos))
+	line_length=as.vector(as.matrix(line_length))
 	
-	EAnnot=utils::read.table("HTA-2_0_ExonAnnotations.txt",header=FALSE,sep="\t",nrows=as.numeric(ELines[3]),skip=as.numeric(ELines[2]),stringsAsFactors=FALSE)
-	JAnnot=utils::read.table("HTA-2_0_JunAssociations.txt",header=FALSE,sep="\t",nrows=as.numeric(JLines[3]),skip=as.numeric(JLines[2]),stringsAsFactors=FALSE)
-	colnames(JAnnot)=c("TC_ID","PSR_ID","JUC_ID","as_type")		
-	Transcripts=utils::read.table("HTA-2_0_TranscriptAnnotations.txt",header=FALSE,sep="\t",nrows=as.numeric(TrLines[3]),skip=as.numeric(TrLines[2]),stringsAsFactors=FALSE)
+	conn <- file(file_name, 'rb')
+	current.pos <- seek(conn, where = file_pos, origin = 'start')
+	data <- readBin(conn, 'raw', n = line_length)
+	s <- paste(sapply(data, rawToChar), collapse='')
+	
+	t=strsplit(s,"\",\"")
+	
+	d=unlist(t)
+	
+	d[1]=substr(d[1],start=2,stop=nchar(d[1]))
+	d[5]=substr(d[5],start=1,stop=nchar(d[5])-1)
+	
+	if(d[1]!="GeneID"){
+		geneID=as.character(d[1])
+		if(length(strsplit(geneID,"\n")[[1]])==2){
+			geneID=strsplit(geneID,"[\n\"]")[[1]][3]
+		}
+		if(length(strsplit(geneID,"\"")[[1]])==2){
+			geneID=strsplit(geneID,"[\"]")[[1]][2]
+		}
+		exonID=as.character(unlist(strsplit(d[2],",")))
+		lengthexons=as.integer(unlist(strsplit(d[3],",")))
+		
+		npersample=sum(lengthexons)
+		
+		allsamples=d[4]
+		samples=as.numeric(unlist(strsplit(allsamples,",")))
+		samplenames=as.character(unlist(strsplit(d[5],",")))
+		nsamples=length(samplenames)
+		
+		splitsamples<-function(x,samples,npersample){
+			start=1+npersample*(x-1)
+			end=npersample*x
+			values=samples[start:end]
+			return(values)
+		}
+		
+		samplevalues=lapply(c(1:nsamples),function(i) splitsamples(i,samples,npersample) )
+		TempData=rbindlist(list(samplevalues))
+		data.table::setnames(TempData,colnames(TempData),samplenames)
+		
+		geneData=data.frame(geneID=rep(geneID,npersample),exonID=rep(exonID,lengthexons))
+		geneData=data.frame(lapply(geneData, as.character), stringsAsFactors=FALSE)
+		DataS=cbind(geneData,TempData)
+	
+	
+		if(!is.null(EandTrAnnotI)){
+			ETrI=utils::read.table(EandTrAnnotI,header=FALSE,stringsAsFactors=FALSE)
+			Lines=ETrI[which(ETrI[,1]==geneID),]
+			ETrAnnot=utils::read.table(EandTrAnnot,header=FALSE,sep="\t",nrows=as.numeric(Lines[3]),skip=as.numeric(Lines[2]),stringsAsFactors=FALSE)
+			TrAnnot=ETrAnnot[,c(1,2,8,4,7)]
+			TrAnnot=TrAnnot[order(TrAnnot[,2]),]
+			colnames(TrAnnot)=c("TC_ID","PSR_ID","strand","EAnnot","TrAnnot")
+			
+			if(!PartiallyAnnotated){
+				Incl=unlist(sapply(TrAnnot[,4],function(x) !grepl("[*]",x)))
+				TrAnnot=TrAnnot[Incl,]
+			}
+			
+			
+			if(!is.null(JAnnotI)){
+				JI=utils::read.table(JI,header=FALSE)
+				Lines=JI[which(JI[,1]==geneID),]
+				JAnnot=utils::read.table(EandTrAnnot,header=FALSE,sep="\t",nrows=as.numeric(Lines[3]),skip=as.numeric(Lines[2]),stringsAsFactors=FALSE)		
+			}
+			else{
+				
+				JEAnnot=ETrAnnot[,-c(5,6,7)]
+				JEAnnot=JEAnnot[!duplicated(JEAnnot),]
+				JEAnnot=JEAnnot[order(JEAnnot[,2]),]
+				JUCs=which(sapply(JEAnnot[,2],function(x) substr(x,1,1)=="J"))
+				JUC=JEAnnot[JUCs,]
+				PSR=JEAnnot[-c(JUCs),]
+				
+				
+				Incl=unlist(sapply(JUC[,4],function(x) !grepl("[*]",x)))
+				JUC=JUC[Incl,]
+				
+				if(!PartiallyAnnotated){
+					Incl=unlist(sapply(PSR[,4],function(x) !grepl("[*]",x)))
+					PSR=PSR[Incl,]
+				}
+				
+				
+				J=unique(JUC[,2])
+				JAnnot=c()
+				for(j in J){
+					
+					PSR3_Final=""
+					PSR5_Final=""
+					
+					#Side 3 annots
+					SubJ=JUC[which(JUC[,2]==j&JUC[,3]==3), ]
+					TC=SubJ[1,1]
+					Strand=SubJ[1,5]
+					
+					Es=unique(SubJ[,4])
+					PSRs3=PSR[which(PSR[,4]%in%Es), ]
+					
+					Count=table(PSRs3[,2])
+					PSR3=names(Count)[which.min(table(PSRs3[,2])-length(Es))]
+					PSRs3temp=PSR[which(PSR[,2]%in%PSR3), 2]
+					
+					if((Strand=="-"|Strand==-1|Strand=="-1.0") & length(PSRs3temp)>0){
+						PSR3_Final=PSRs3temp[1]
+					}			
+					else if((Strand=="+"|Strand==1|Strand=="1.0") & length(PSRs3temp)>0){
+						PSR3_Final=PSRs3temp[length(PSRs3temp)]
+					}	
+					Row=c(TC,PSR3_Final,j,"3")
+					JAnnot=rbind(JAnnot,Row)
+					
+					#Side 5 annots
+					SubJ=JUC[which(JUC[,2]==j&JUC[,3]==5), ]
+					TC=SubJ[1,1]
+					Strand=SubJ[1,5]
+					
+					Es=unique(SubJ[,4])
+					PSRs5=PSR[which(PSR[,4]%in%Es), ]
+					
+					Count=table(PSRs5[,2])				
+					PSR5=names(Count)[which.min(table(PSRs5[,2])-length(Es))]
+					PSRs5temp=PSR[which(PSR[,2]%in%PSR5), 2]
+					
+					if((Strand=="-"|Strand==-1|Strand=="-1.0") & length(PSRs5temp)>0){
+						PSR5_Final=PSRs5temp[length(PSRs5temp)]
+					}			
+					else if((Strand=="+"|Strand==1|Strand=="1.0") & length(PSRs5temp)>0){
+						PSR5_Final=PSRs5temp[1]
+					}	
+					Row=c(TC,PSR5_Final,j,"5")
+					JAnnot=rbind(JAnnot,Row)
+					
+					#exclusions
+					I1=0
+					I2=0
+					if(PSR3_Final!="" & PSR5_Final!="" & (Strand=="+"|Strand==1|Strand=="1.0")){
+						I1=which(PSR[,2]==PSR3_Final)[length(which(PSR[,2]==PSR3_Final))]
+						I2=which(PSR[,2]==PSR5_Final)[1]
+					}
+					else if(PSR3_Final!="" & PSR5_Final!="" & (Strand=="-"|Strand==-1|Strand=="-1.0")){
+						I1=which(PSR[,2]==PSR5_Final)[length(which(PSR[,2]==PSR5_Final))]
+						I2=which(PSR[,2]==PSR3_Final)[1]
+					}
+					if(I1!=0&I2!=0&I1!=(I2+1)&I2!=(I1+1)){
+						if(I1<I2){
+							R=seq(I1+1,I2,1)
+						}
+						else if(I1>I2){
+							R=seq(I1-1,I2,-1)
+						}
+						ExclPSR_temp=PSR[R,]
+						Exrows=nrow(ExclPSR_temp)
+						
+						if(Exrows!=0){
+							ExclPSR=unique(ExclPSR_temp[,2])
+							if(any(is.na(ExclPSR))){
+								ExclPSR=ExclPSR[-c(which(is.na(ExclPSR)))]
+							}
+							for(e in ExclPSR){
+								if(e!=PSR5_Final & e!=PSR3_Final){
+									Row=c(TC,e,j,"exclusion")
+									JAnnot=rbind(JAnnot,Row)
+								}
+								
+							}
+						}
+					}
+					
+				}
+				if(!is.null(JAnnot)){
+					JAnnot=JAnnot[order(JAnnot[,2]),]
+					colnames(JAnnot)=c("TC_ID","PSR_ID","JUC_ID","as_type")			
+					JAnnot[,1]=as.character(JAnnot[,1])
+					JAnnot[,2]=as.character(JAnnot[,2])
+					JAnnot[,3]=as.character(JAnnot[,3])
+					JAnnot[,4]=as.character(JAnnot[,4])
+				}
+				else{
+					JAnnot=c()
+				}
+			}
+			if(Juninfo=="Ensemble"){
+				ensembl = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl")
+				attributes.region<- c("chromosome_name", "start_position", "end_position", "ensembl_gene_id")							
+				filter.symbol<- "hgnc_symbol"
+				
+				TrAnnot=c()
+				
+				trim <- function(s, ...) {
+					s <- as.character(s);
+					s <- sub("^[\t\n\f\r[:punct:]  ]*", "", s);
+					s <- sub("[\t\n\f\r ]*$", "", s);
+					s;
+				} 
+				
+				trans=paste(geneID,".hg",sep="")
+				exons=positionData[positionData$transcript_cluster_id == trans, "probeset_id"]
+				
+				PSR=sapply(exons, function(x) substr(x,1,3)!="JUC")
+				exons=exons[PSR]
+				trans=paste(trans,".1",sep="")
+				symbol.to.annotate <- AnnotateGenes(trans,transcriptData)$symbol # get HBC identity
+				if(all(symbol.to.annotate!="---")){
+					ensembl.output     <- AnnotateGeneSymbol(symbol.to.annotate) # get region
+					if(nrow(ensembl.output) > 0){
+						gene  = makeGene(id = ensembl.output$ensembl_gene_id, biomart = ensembl)
+						
+						strand <- transcriptData[transcriptData[,1] == trans,][2]
+						gene.positions   <- transcriptData[transcriptData$probeset_id %in% exons,]
+						gene.positions$start=as.numeric(gene.positions$start)
+						gene.positions$stop=as.numeric(gene.positions$stop)
+						gene.positions<-gene.positions[order(gene.positions$start,decreasing=FALSE),]
+						gene.positions[,1]=sapply(gene.positions[,1],function(x) strsplit(x,"[.]")[[1]][1])
+						PSR=gene.positions[,1]
+						G=gene@ens
+						for(p in PSR){
+							Start=gene.positions[which(gene.positions[,1]==p),3]
+							Stop=gene.positions[which(gene.positions[,1]==p),4]
+							for(r in 1:nrow(G)){
+								if(G[r,4]<=Start&G[r,5]>=Stop){
+									Row=c(geneID,p,strand,G[r,3],G[r,2])
+									TrAnnot=rbind(TrAnnot,Row)
+								}
+							}
+						}
+						
+						if(is.null(TrAnnot)){
+							TrAnnot=c()
+						}
+						else{
+							colnames(TrAnnot)=c("TC_ID","PSR_ID","strand","EAnnot","TrAnnot")
+							
+							TrAnnot=as.data.frame(TrAnnot)
+							TrAnnot[,1]=as.character(TrAnnot[,1])
+							TrAnnot[,2]=as.character(TrAnnot[,2])
+							TrAnnot[,3]=as.character(TrAnnot[,3])
+							TrAnnot[,4]=as.character(TrAnnot[,4])
+							TrAnnot[,5]=as.character(TrAnnot[,5])
+							TrAnnot=as.matrix(TrAnnot)
+						}
+						
+					}
+					else{
+						TrAnnot=c()
+					}
+				}
+				else{
+					TrAnnot=c()
+				}
+			}
+			
+		}
+		else{
+			ETrAnnot=c()
+			JAnnot=c()
+		}
+		
+		if(length(JAnnot)==0|length(TrAnnot)==0){
+			
+			output=paste(geneID,"No valuable isoform composition information available",sep="\t")
+			if(!is.null(Location)){
+				utils::write.table(output, paste(Location,"/",Name,"_NotAssessedTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				#save(output, file=paste(Location,"/REIDS_IsoformInfo_", geneID, ".RData", sep=""))
+				#rm(output)
+				#gc()
+				close(conn)
+				return(paste(geneID," Completed",sep=""))
+			}
+			else{
+				close(conn)
+				return(output)
+			}
+		}
+		
+		
+		colnames(DataS)[2]="ExonID"
+		if(any(is.na(JAnnot[,2]))){
+			D=which(is.na(JAnnot[,2]))
+			JAnnot=JAnnot[-c(D),]
+		}
+		
+		
+		OutRange=matrix(0,nrow=length(unique(DataS$ExonID)),ncol=length(Groups))
+		for(i in 1:length(unique(DataS$ExonID))){
+			for(j in 1:length(Groups)){
+				Subset=as.vector(as.matrix(DataS[which(DataS$ExonID==unique(DataS$ExonID)[i]),Groups[[j]]+2]))
+				Range=range(Subset)
+				OutRange[i,j]=Range[2]-Range[1]
+			}	
+		}
+		rownames(OutRange)=unique(DataS$ExonID)
+		
+		PSRsExons=unique(DataS$ExonID)[which(substr(unique(DataS$ExonID),1,3)=="PSR")]
+		Continue=TRUE
+		TempRange=as.vector(as.matrix(OutRange))
+		
+		while(Continue){
+			M=stats::median(TempRange)
+			SD=stats::sd(TempRange)
+			
+			RangeCutOff=M+1.5*SD
+			
+			if(length(which(TempRange>RangeCutOff))==0){
+				Continue=FALSE
+			}	
+			else{
+				TempRange=TempRange[-c(which(TempRange>RangeCutOff))]
+			}	
+			
+			if(RangeCutOff<2){
+				RangeCutOff=2
+			}
+		}
+		
+		GroupData=list()
+		DelJ=c()
+		Rem=c()
+		for(g in 1:length(Groups)){
+			
+			GData=DataS[,c(1,2,Groups[[g]]+2)]
+			
+			for(e in unique(GData$ExonID)){
+				Subset=GData[which(GData$ExonID==e),-c(1,2)]
+				Temp=as.vector(as.matrix(GData[which(GData$ExonID==e),-c(1,2)]))
+				
+				StopDel=c()
+				if(length(Temp)<=12){
+					StopDel=0
+					next
+				}
+				else if(length(Temp)<18){
+					StopDel=2
+				}
+				else{
+					StopDel=3
+				}
+				
+				if(round(OutRange[e,g],2)>RangeCutOff){
+					Continue=TRUE	
+					CutOff=c()
+					Flagged=c()
+					while(Continue){
+						M=mean(Temp)
+						SD=stats::sd(Temp)	
+						Dist=abs(Temp-M)
+						Test=Temp[which.max(Dist)]
+						if(Test>=M){
+							P=stats::pnorm(Test,m=M,sd=SD,lower.tail=FALSE)
+						}
+						else{
+							P=stats::pnorm(Test,m=M,sd=SD,lower.tail=TRUE)
+						}
+						if(round(P,2)>=0.05){
+							CutOff=c(CutOff)
+							Continue=FALSE
+						}	
+						else{
+							CutOff=c(CutOff,Temp[which.max(Dist)])
+							Temp=Temp[-c(which.max(Dist))]
+							R=range(Temp)
+							RR=R[2]-R[1]
+							if(round(RR,2)<=RangeCutOff){
+								Continue=FALSE								
+							}		
+						}
+					}
+					Temp=Temp[-c(which.max(Dist))]
+					R=range(Temp)
+					RR=R[2]-R[1]
+					if(round(RR,2)>2*RangeCutOff&substr(e,1,3)=="JUC"){
+						DelJ=c(DelJ,e)
+					}
+					
+					if(ncol(Subset)<=6){
+						AtLeast=ncol(Subset)
+					}
+					else{
+						AtLeast=ncol(Subset)-1
+					}
+					
+					if(length(CutOff)>0){
+						F=c()
+						P=c()
+						for(c in CutOff){
+							if(c>=M){
+								P=c(P,stats::pnorm(c,m=M,sd=SD,lower.tail=FALSE))
+							}
+							else{
+								P=c(P,stats::pnorm(c,m=M,sd=SD,lower.tail=TRUE))
+							}
+							
+							F=c(F,rownames(which(Subset==c,arr.ind=TRUE))[1])
+						}
+						FlagP=c()
+						names(P)=F
+						for(f in unique(F)){
+							FlagP=c(FlagP,mean(P[f]))
+						}
+						names(FlagP)=unique(F)
+						Flagged=names(which(table(F)>=AtLeast))
+						FlagP=FlagP[Flagged]
+					}
+					
+					if(length(Flagged)>0){
+						#print(e)
+						#print(length(Flagged))
+						if(length(Flagged)>length(StopDel)){
+							Flagged=names(sort(FlagP)[1:StopDel])
+							Rem=c(Rem,Flagged)
+						}
+						#GData=GData[-c(which(rownames(GData)%in%Flagged)),]
+					}
+				}
+			}
+			
+			
+		}
+		
+		if(length(Rem)>0){
+			if(any(is.na(Rem))){
+				Rem=Rem[-c(which(is.na(Rem)))]
+			}
+			if(length(Rem)>0){
+				for(g in 1:length(Groups)){
+					GData=DataS[,c(1,2,Groups[[g]]+2)]
+					GData=GData[-c(which(rownames(GData)%in%Rem)),]
+					GroupData[[g]]=GData	
+				}
+			}
+			else{
+				for(g in 1:length(Groups)){
+					GData=DataS[,c(1,2,Groups[[g]]+2)]
+					GroupData[[g]]=GData	
+				}
+			}
+		}
+		else{
+			for(g in 1:length(Groups)){
+				GData=DataS[,c(1,2,Groups[[g]]+2)]
+				GroupData[[g]]=GData	
+			}
+		}
+		
+		print(geneID)	
+		
+		DelJuncs=names(which(table(DelJ)==length(Groups)))
+		Jucs=unique(JAnnot[,3])[which(!is.na(unique(JAnnot[,3])))]
+		
+		
+		DABGPSR=unique(PSRsExons)[which(unique(PSRsExons)%in%Low_AllSamples)]
+		if(length(DABGPSR)>0){
+			PSRsExons=PSRsExons[-c(which(PSRsExons%in%DABGPSR))]
+		}
+		
+		Const=unique(PSRsExons)[which(!unique(PSRsExons)%in%ASPSR)]
+		AS=unique(PSRsExons)[which(unique(PSRsExons)%in%ASPSR)]
+		JAsses=data.frame(matrix(0,nrow=length(Jucs),ncol=(3+length(Groups))))
+		colnames(JAsses)=c("Pattern","Flat","Low",paste("Low-",c(1:length(Groups)),sep=""))
+		Hold=1
+		Connections=data.frame(matrix(0,ncol=(2+length(Groups)),nrow=(nrow(JAsses)*length(Groups))))
+		Place=1
+		#ExonAssesment=data.frame(matrix(0,ncol=2,nrow=length(unique(JAnnot$PSR_ID))))
+		#rownames(ExonAssesment)=unique(JAnnot$PSR_ID)
+		ASJ=c()
+		ExclDef=c()
+		
+		# Assesment of junctions
+		if(length(Jucs)>0){
+			for(k in 1:length(Jucs)){
+				j=Jucs[k]
+				
+				if(is.na(j)){
+					next
+				}
+				
+				JValues=list()
+				JList=list()
+				JLengths=list()
+				JAssesP=c()
+				JAssesV=c()
+				JFlat=c()
+				JLow=c()
+				
+				#valid probes?
+				if(nrow(DataS[which(DataS$ExonID==j),-c(1,2)])<=3){
+					JAssesP=c(JAssesP,"Junction has too few valid probes",rep("-",(2+length(Groups))))
+					JAsses[k,]=JAssesP
+					Hold=Hold+1
+					next				
+				}
+				
+				#Low_AllSamples
+				DABG=TRUE
+				if(j%in%Low_AllSamples){
+					JAssesP=c(JAssesP,"Junction is not DABG",c("-",TRUE,rep("-",length(Groups))))
+					#DABG=FALSE	
+				}
+				
+				if(j%in%DelJuncs){
+					JAssesP=c(JAssesP,"Junction has a too large spread of values",rep("-",(2+length(Groups))))
+					JAsses[k,]=JAssesP
+					Hold=Hold+1
+					next
+				}
+				
+				if(j%in%unique(DataS$ExonID)){
+					JD=list()
+					for(g in 1:length(Groups)){
+						JD[[g]]=as.vector(as.matrix(GroupData[[g]][which(GroupData[[g]]$ExonID==j),-c(1,2)]))
+					}	
+					#JUC_Ranks=sort(JD,index.return=TRUE)$ix
+					JUC_Ranks=rank(unlist(JD),ties.method="random")
+					JList[[length(JList)+1]]=JUC_Ranks
+					names(JList)[length(JList)]=j
+					JLengths=c(JLengths,length(JUC_Ranks))
+					JValues=list(JD)
+					names(JValues)=j
+				}
+				
+				Set=sort(JAnnot[which(JAnnot[,3]==j&(JAnnot[,4]!="exclusion")),2])
+				L=list()
+				D=list()
+				if(!all(Set%in%DataS$ExonID)){
+					Set=Set[-c(which(!Set%in%DataS$ExonID))]
+				}
+				if(length(Set)==2&length(unique(Set))==1){
+					print(j)
+				}
+				if(length(Set)>1){
+					for(s in Set){	
+						PSR=list()
+						for(g in 1:length(Groups)){
+							PSR[[g]]=as.vector(as.matrix(GroupData[[g]][which(GroupData[[g]]$ExonID==s),-c(1,2)]))
+						}
+						D[[s]]=PSR
+						Ranks=list(rank(unlist(PSR),ties.method="random"))
+						L=c(L,Ranks)
+					}
+					names(L)=Set	
+				}
+				else{
+					JAssesP=c(JAssesP,"Junction does not have 2 anchor points",rep("-",(2+length(Groups))))
+					JAsses[k,]=JAssesP
+					Hold=Hold+1
+					next			
+				}
+				L=c(L,JList)
+				D=c(D,JValues)
+				
+				LL=sapply(unlist(D,recursive=FALSE),length)
+				if(length(unique(LL))>1){
+					MinLength=min(LL)
+					Index=which(LL>MinLength)
+					for(sj in 1:length(Index)){
+						si=Index[sj]
+						t=MinLength/(length(Groups[[1]]))
+						Dnew=c()
+						temp=c()
+						g=as.numeric(substr(names(si),nchar(names(si)),nchar(names(si))))
+						p=substr(names(si),1,nchar(names(si))-1)
+						temp=GroupData[[g]][which(GroupData[[g]]$ExonID==p),-c(1,2)]
+						M=apply(as.matrix(temp),2,stats::median)
+						for(c1 in 1:ncol(temp)){
+							Dist=abs(temp[[c1]]-M[c1])
+							I=rank(Dist)
+							Select=which(I<=t)
+							if(length(Select)<t){
+								Add=t-length(Select)
+								SelectAdd=which((I>t)&(I<=(t+Add)))[c(1:Add)]
+								Select=c(Select,SelectAdd)
+							}
+							else if(length(Select)>t){
+								Del=length(Select)-t
+								SelectDel=which(Select>=t)[c(1:Del)]
+								Select=Select[-c(SelectDel)]
+							}
+							NewC=temp[Select,c1]
+							Dnew=cbind(Dnew,NewC)
+						}
+						D[[p]][[g]]=as.vector(as.matrix(Dnew))
+						PSR=unlist(D[[p]])
+						#Ranks=list(sort(PSR,index.return=TRUE)$ix)
+						Ranks=rank(PSR)
+						L[[p]]=Ranks	
+						
+					}
+				}
+				
+				if(length(Set)>1){
+					L[[1]]=(L[[1]]+L[[2]])/2
+					L=L[-c(2)]
+					L[[1]]=sort(L[[1]],index.return=TRUE)$ix
+				}	
+				Ranks=do.call("cbind",L)
+				
+				Y=as.vector(as.matrix(Ranks))
+				exon=c()
+				for(c in 1:ncol(Ranks)){
+					exon=c(exon,rep(c,nrow(Ranks)))
+				}
+				tissuetemp=c()
+				for(g in 1:length(Groups)){
+					tissuetemp=c(tissuetemp,rep(g,nrow(Ranks)/(length(Groups))))
+				}
+				tissue=rep(tissuetemp,ncol(Ranks))
+				
+				exon=as.factor(exon)
+				tissue=as.factor(tissue)
+				ft1<-stats::lm(Y~exon*tissue-1)
+				
+				Inter=summary(ft1)$coefficients[((length(L)+2):nrow(summary(ft1)$coefficients)),4]
+				
+				if(all(round(Inter,2)>=0.05)){
+					# Junction is product of its supporting exons
+					JAssesP=c(JAssesP,"Pattern Supported")						
+				}
+				else{
+#					if(DABG==FALSE){
+#						JAssesP=c(JAssesP,"Junction is not DABG",c("-",TRUE,rep("-",length(Groups))))
+#						JAsses[k,]=JAssesP
+#						Hold=Hold+1
+#						next
+#					}
+					JAssesP=c(JAssesP,"Pattern Not Supported")
+				}
+				
+				#Junction Value Assessment
+				Set=sort(JAnnot[which(JAnnot[,3]==j&(JAnnot[,4]!="exclusion")),2])
+#				
+				#Flat line
+				tissuetemp=c()
+				for(g in 1:length(Groups)){
+					tissuetemp=c(tissuetemp,rep(g,length(D[[1]][[1]])))
+				}
+				Flattest=stats::lm(unlist(D[[length(D)]])~tissuetemp-1)
+				Flat=summary(Flattest)$coefficients[1,4]
+				if(round(Flat,2)>0.05){
+					JFlat=c(JFlat,TRUE)
+				}
+				else{
+					JFlat=c(JFlat,FALSE)
+					
+				}	
+				
+				#Low??
+				Low=rep(FALSE,length(Groups))
+				JLow=FALSE
+				if(j%in%unlist(Low_GSamples)){
+					R=lapply(Low_GSamples,function(x) j%in%x)
+					R=unlist(R)
+					if(all(R)){
+						if(JFlat){
+							Low[which(R)]=TRUE
+						}	
+					}
+					else if(any(R)){
+						Low[which(R)]=TRUE
+					}
+				}					
+				Row=c(JAssesP,JFlat,JLow,Low)
+				JAsses[k,]=Row
+				
+			}
+			JAsses=cbind(Jucs,JAsses)
+			
+			
+			# PSR reflection on junctions
+			
+			for(r in 1:nrow(JAsses)){
+				R=JAsses[r,]
+				J=as.character(JAsses[r,1])
+				PSRs=unique(JAnnot[,2][which(JAnnot[,3]==J)])
+				supp=sort(JAnnot[,2][which(JAnnot[,2]%in%PSRs&JAnnot[,3]==J&JAnnot[,4]!="exclusion")])
+				if(!all(supp%in%DataS$ExonID)){
+					supp=supp[-c(which(!supp%in%DataS$ExonID))]
+				}
+				excl=sort(JAnnot[,2][which(JAnnot[,2]%in%PSRs&JAnnot[,3]==J&JAnnot[,4]=="exclusion")])
+				if(!all(excl%in%DataS$ExonID)){
+					excl=excl[-c(which(!excl%in%DataS$ExonID))]
+				}
+				if(R[2]%in%c("Junction has too few valid probes","Junction has a too large spread of values","Junction does not have 2 anchor points")){
+					next
+				}
+				#Do the support points connect? Check Low, 1-Low and 2-Low
+				for(g in 1:length(Groups)){
+					
+					GData=GroupData[[g]]
+					
+					if(R[2]=="Junction is not DABG"){
+						Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"never")
+						Place=Place+1
+					}
+					
+					else if(as.logical(R[5+g-1])){
+						Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"never")
+						Place=Place+1
+						#junction is low	
+					}	
+					else{
+						Connections[Place,c(1,2,g+2)]=c(J,paste(supp,collapse="-"),"present")
+						Place=Place+1
+						#junction is present ==> both linking points are present and connection is present
+						#if excl junction: exon is indeed excluded => AS
+						
+						if(length(excl)>0){					
+							for(e in excl){
+								ExclDef=c(ExclDef,e)
+								
+								if(JAsses[r,2]=="Pattern Not Supported"){
+									
+									JAsses[r,2]="Pattern Supported"
+								}		
+							}
+						}		
+					}	
+				}	
+			}		
+		}
+		
+		
+		if(any(Connections[,1]==0)){
+			Connections=Connections[-c(which(Connections[,1]==0)),]
+		}
+		if(any(duplicated(Connections))){
+			Connections=Connections[!duplicated(Connections),]
+		}
+		Links=c()		
+		UL=unique(Connections[,c(1,2)])
+		for(c in 1:nrow(UL)){
+			rowLinks=c(cbind(UL[c,1],UL[c,2]))
+			Set=which(Connections[,1]==UL[c,1]&Connections[,2]==UL[c,2])
+			for(g in 1:length(Groups)){
+				GAsses=Connections[Set,g+2]
+				Get=GAsses[which(GAsses!=0)]
+				if(all(Get=="never")){
+					rowLinks=c(rowLinks,"never")
+				}
+				else{
+					rowLinks=c(rowLinks,"present")
+				}
+			}
+			Links=rbind(Links,rowLinks)
+			
+		}	
+		
+		Edges=c()
+		#Exons first
+		Exons=sort(unique(c(unique(JAnnot[,2]),c(unique(PSRsExons),unique(DABGPSR)))))
+		Exons=Exons[which(Exons%in%DataS[,2])]
+		if(length(Exons)==0){
+			output=paste(geneID,"No PSR's present",sep="\t")
+			if(!is.null(Location)){
+				utils::write.table(output, paste(Location,"/",Name,"_NotAssessedTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				#save(output, file=paste(Location,"/REIDS_IsoformInfo_", geneID, ".RData", sep=""))
+				rm(output)
+				gc()
+				close(conn)
+				return(paste(geneID," Completed",sep=""))
+			}
+			else{
+				close(conn)
+				return(output)
+			}
+		}
+		for(i in 1:(length(Exons)-1)){
+			R=c(Exons[i],Exons[i+1])
+			Edges=rbind(Edges,R)
+		}
+		col1=rep("grey",nrow(Edges))
+		width1=rep(2,nrow(Edges))
+		G=list()
+		Cols=list()
+		Widths=list()
+		for(g in 1:(length(Groups)+1)){
+			G[[g]]=Edges
+			Cols[[g]]=col1	
+			Widths[[g]]=width1
+		}
+		#Links
+		if(length(Jucs)>0&length(Links)>0){
+			for(l in 1:nrow(Links)){
+				E=strsplit(Links[l,2],"-")[[1]]
+				if(length(E)>1){
+					for(g in 1:(length(Groups)+1)){
+						G[[g]]=rbind(G[[g]],E)
+						if(g==1){
+							Cols[[1]]=c(Cols[[1]],"blue")
+							Widths[[1]]=c(Widths[[1]],2)
+						}
+						else{
+							L=Links[l,g+1]
+							if(L=="present"){
+								Cols[[g]]=c(Cols[[g]],"blue")
+								Widths[[g]]=c(Widths[[g]],2)
+							}
+							else{
+								Cols[[g]]=c(Cols[[g]],"red")
+								Widths[[g]]=c(Widths[[g]],2)
+							}
+						}
+					}			
+				}
+			}
+			#rownames(Edges)=1:nrow(Edges)
+		}
+		
+		if(length(Groups)==2){
+			FC=c()
+			for(e in Exons){				
+				A=mean(as.vector(as.matrix(GroupData[[1]][which(GroupData[[1]]$ExonID==e),-c(1,2)])))
+				B=mean(as.vector(as.matrix(GroupData[[2]][which(GroupData[[2]]$ExonID==e),-c(1,2)])))
+				FC=c(FC,A-B)
+			}	
+			
+			names(FC)=Exons
+			
+			
+			if(length(Const)==0){
+				MedFC=stats::median(FC)
+				SDFC=0.5
+			}
+			else{
+				ConstFC=FC[Const]
+				MedFC=stats::median(ConstFC)
+				SDFC=stats::sd(ConstFC)
+				if(is.na(SDFC)){
+					SDFC=0.5
+				}
+			}
+			ASFC=FC[AS]
+			ASPvals=c()
+			for(a in FC){
+				if(a>MedFC){
+					ASPvals=c(ASPvals,stats::pnorm(a,MedFC,SDFC,lower.tail=FALSE))
+				}
+				else{
+					ASPvals=c(ASPvals,stats::pnorm(a,MedFC,SDFC,lower.tail=TRUE))
+				}	
+			}
+			names(ASPvals)=names(FC)
+			ASPvals=stats::p.adjust(ASPvals,"fdr")
+			ASfctemp=names(which(ASPvals<0.05))
+			ASfc=ASfctemp[which(!ASfctemp%in%c(AS,ASJ))]
+		}
+		else{
+			FC=rep("-",length(Exons))
+			ASfc=NULL
+		}
+		colNodes=rep("grey",length(Exons))
+		names(colNodes)=Exons
+		ColN=list()
+		for(g in 1:(length(Groups)+1)){
+			ColN[[g]]=colNodes			
+		}
+		for(c in Exons){
+			if(c%in%DABGPSR){
+				for(g in c(1:length(Groups)+1)){
+					ColN[[g]][c]="grey"
+				}	
+			}
+			else if(c%in%Const){
+				for(g in c(1:length(Groups)+1)){
+					ColN[[g]][c]="black"
+				}	
+			}
+			else{
+				if(length(Groups)==2){
+					#if(round(ASPvals[c],2)<0.05){
+					if(FC[c]<0){
+						ColN[[2]][c]="red"
+						ColN[[3]][c]="green"
+					}
+					else{
+						ColN[[2]][c]="green"
+						ColN[[3]][c]="red"
+					}
+					#}
+				}
+			}	
+		}
+		
+		
+		DelJ=unique(c(DelJ,as.character(JAsses[,1][which(JAsses[,2]%in%c("Junction has too few valid probes","Junction has a too large spread of values","Junction does not have 2 anchor points"))])))
+		OutList=data.frame("TC_ID"=rep(DataS[1,1],length(Exons)),"PSR_ID"=Exons,"Type"=rep(0,length(Exons)),"Unreliable Junctions"=rep(0,length(Exons)),"Linking Junctions"=rep(0,length(Exons)),"Exclusion Junctions"=rep(0,length(Exons)),"Supported by"=rep(0,length(Exons))
+				,"Identified by"=rep(0,length(Exons)),"Fold Change"=rep(0,length(Exons)),"Exons"=rep(0,length(Exons)))
+		
+		#Reduce transcripts in all samples:
+		NeverPresent=which(apply(Links[,3:ncol(Links),drop=FALSE],1,function(x) all(x==rep("never",length(Groups)))))
+		#NeverLinkedPSR=list()
+		NeverLinkedTr=list()
+		if(length(NeverPresent)>0){
+			RLinks=Links[NeverPresent,,drop=FALSE]		
+			for(r in 1:nrow(RLinks)){
+				PSR=RLinks[r,2]
+				PSRs=strsplit(PSR,"-")[[1]]
+				set=c()
+				for(t in unique(TrAnnot[,5])){
+					PSRset=TrAnnot[which(TrAnnot[,5]==t),2]
+					if(all(PSRs%in%PSRset)){
+						set=c(set,t)
+					}
+				}
+				NeverLinkedTr[[r]]=set
+#			set=TrAnnot[which(TrAnnot[,2]==RLinks[r,1]),5]
+#			#set=strsplit(RLinks[r,2],"-")[[1]]		
+#			#NeverLinkedPSR[[r]]=set
+#			NeverLinkedTr[[r]]=set
+			}
+			NeverLinkedTr=unique(unlist(NeverLinkedTr))
+		}
+		
+		
+		#Event Type
+		TC=DataS[1,1]
+		Strand=TrAnnot[1,3]
+		TRS=list()
+		N=c()
+		for(tr in unique(TrAnnot[,5])){
+			if(tr%in%NeverLinkedTr){
+				next
+			}
+			Set=TrAnnot[which(TrAnnot[,5]==tr),2]
+			PSet=Set[which(substr(Set,1,1)=="P")]
+			ESete=TrAnnot[which(TrAnnot[,5]==tr),4]
+			ESet=ESete[which(substr(Set,1,1)=="P")]
+#			Remove=FALSE
+#			if(length(NeverLinkedPSR)>0){
+#				for(nl in NeverLinkedPSR){
+#					Pos1=which(PSet==nl[1])
+#					Pos2=which(PSet==nl[2])
+#					if(length(Pos1)>0&length(Pos2)>0){
+#						if(Pos1+1==Pos2){
+#							#linked in transcript but the link is not present thus transcript can be removed from the collection
+#							Remove=TRUE
+#						}
+#					}
+#				}
+#			}
+			if(length(DABGPSR)>0){
+				Stop=FALSE
+				for(d in DABGPSR){
+					if(any(PSet==d)){
+						Stop=TRUE
+						break					
+					}
+				}
+				if(Stop){
+					next
+				}
+			}
+			
+			if(Strand=="-"|Strand==-1){
+				PSet=rev(sort(PSet))
+				ESet=rev(sort(ESet))
+			}
+			names(ESet)=PSet
+			TRS[[length(TRS)+1]]=ESet	
+			N=c(N,tr)
+		}
+		names(TRS)=N
+		if(length(TRS)==0){
+			
+			output=list("Output"=OutList)
+			if(!is.null(Location)){
+				if(!is.null(output[[1]])){
+					utils::write.table(output[[1]], paste(Location,"/",Name,"_ASInfo.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+				}
+				#save(output, file=paste(Location,"/REIDS_IsoformInfo_", geneID, ".RData", sep=""))
+				rm(output)
+				gc()
+				close(conn)
+				return(paste(geneID," Completed",sep=""))	
+			}	
+			else{
+				close(conn)
+				return(output)
+			}	
+		}
+		
+		AllExons=unique(unlist(TRS))		
+		for(e in Exons){
+			EAnnotp=TrAnnot[which(TrAnnot[,2]==e),4]
+			EAnnotp=EAnnotp[which(EAnnotp%in%AllExons)]
+			EAnnotp=paste(EAnnotp,collapse="|")
+			s=JAnnot[which(JAnnot[,2]==e),c(3,4),drop=FALSE]
+			Dels=s[which(s[,1]%in%DelJ),1]
+			if(length(Dels)>0){
+				s=s[which(!s[,1]%in%DelJ),,drop=FALSE]
+			}
+			else{
+				Dels="-"
+			}
+			if(e%in%DABGPSR){
+				r=c("not DABG",rep("-",6),EAnnotp)
+			}
+			
+			else if(e%in%Const){			
+				if(!(all(is.na(s)))){
+					Jss=c()
+					Jsse=c()
+					Js=s[which(s[,2]%in%c(3,5)),1]
+					if(length(Js)>0){
+						Jss=as.character(JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1])
+						if(!(all(Js%in%Jss))){
+							Dels=c(Dels,Js[which(!Js%in%Jss)])
+							if(length(Jss)==0){
+								Jss="-"
+							}
+						}
+					}
+					else{
+						Jss="-"
+					}
+					Jse=s[which(s[,2]=="exclusion"),1]
+					if(length(Jse)>0){
+						Jsse=as.character(JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1])
+					}
+					else{
+						Jsse="-"
+					}
+					SupportedBy=c(Jss,Jsse)
+					if(all(SupportedBy=="-")){
+						SupportedBy="-"
+					}
+					else if(all(SupportedBy%in%s[,1])){
+						SupportedBy="All"
+					}	
+					else if(!any(SupportedBy%in%s[,1])){
+						SupportedBy="None"
+					}
+					else{
+						if(any(SupportedBy=="-")){
+							SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+						}
+					}
+					if(length(Dels)>1&any(Dels=="-")){
+						Dels=Dels[-c(which(Dels=="-"))]
+					}
+					
+					r=c("Const",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"-",FC[e],EAnnotp)
+				}	
+				else{
+					r=c("Const",rep("-",5),FC[e],EAnnotp)
+				}
+			}
+			else if(e%in%AS){
+				
+				if(!(all(is.na(s)))){
+					Jss=c()
+					Jsse=c()
+					Js=s[which(s[,2]%in%c(3,5)),1]
+					if(length(Js)>0){
+						Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+						if(!(all(Js%in%Jss))){
+							Dels=c(Dels,Js[which(!Js%in%Jss)])
+							if(length(Jss)==0){
+								Jss="-"
+							}
+						}
+					}
+					else{
+						Jss="-"
+					}
+					Jse=s[which(s[,2]=="exclusion"),1]
+					if(length(Jse)>0){
+						Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+					}
+					else{
+						Jsse="-"
+					}
+					SupportedBy=c(as.character(Jss),as.character(Jsse))
+					if(all(SupportedBy=="-")){
+						SupportedBy="-"
+					}
+					else if(all(SupportedBy%in%s[,1])){
+						SupportedBy="All"
+					}	
+					else if(!any(SupportedBy%in%s[,1])){
+						SupportedBy="None"
+					}	
+					else{
+						if(any(SupportedBy=="-")){
+							SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+						}
+					}
+					if(length(Dels)>1&any(Dels=="-")){
+						Dels=Dels[-c(which(Dels=="-"))]
+					}
+					r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"REIDS",FC[e],EAnnotp)
+				}	
+				else{
+					r=c("AS",rep("-",4),"REIDS",FC[e],EAnnotp)
+				}
+			}
+			else if(e%in%ASJ){
+				if(!(all(is.na(s)))){
+					Jss=c()
+					Jsse=c()
+					Js=s[which(s[,2]%in%c(3,5)),1]
+					if(length(Js)>0){
+						Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+						if(!(all(Js%in%Jss))){
+							Dels=c(Dels,Js[which(!Js%in%Jss)])
+							if(length(Jss)==0){
+								Jss="-"
+							}
+						}
+					}
+					else{
+						Jss="-"
+					}
+					Jse=s[which(s[,2]=="exclusion"),1]
+					if(length(Jse)>0){
+						Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+					}
+					else{
+						Jsse="-"
+					}
+					SupportedBy=c(as.character(Jss),as.character(Jsse))
+					if(all(SupportedBy=="-")){
+						SupportedBy="-"
+					}
+					else if(all(SupportedBy%in%s[,1])){
+						SupportedBy="All"
+					}	
+					else if(!any(SupportedBy%in%s[,1])){
+						SupportedBy="None"
+					}
+					else{
+						if(any(SupportedBy=="-")){
+							SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+						}
+					}
+					if(length(Dels)>1&any(Dels=="-")){
+						Dels=Dels[-c(which(Dels=="-"))]
+					}
+					r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"Junction Support",FC[e],EAnnotp)
+				}
+				else{
+					r=c("AS",rep("-",4),"Junction Support",FC[e],EAnnotp)
+				}	
+			}
+			else if(e%in%ASfc){
+				
+				if(!(all(is.na(s)))){
+					Jss=c()
+					Jsse=c()
+					Js=s[which(s[,2]%in%c(3,5)),1]
+					if(length(Js)>0){
+						Jss=JAsses[which(JAsses[,1]%in%Js&JAsses[,2]=="Pattern Supported"&JAsses[,4]==FALSE),1]
+						if(!(all(Js%in%Jss))){
+							Dels=c(Dels,Js[which(!Js%in%Jss)])
+							if(length(Jss)==0){
+								Jss="-"
+							}
+						}
+					}
+					else{
+						Jss="-"
+					}
+					Jse=s[which(s[,2]=="exclusion"),1]
+					if(length(Jse)>0){
+						Jsse=JAsses[which(JAsses[,1]%in%Jse&JAsses[,4]==FALSE),1]
+					}else{
+						Jsse="-"
+					}
+					SupportedBy=c(as.character(Jss),as.character(Jsse))
+					if(all(SupportedBy=="-")){
+						SupportedBy="-"
+					}
+					else if(all(SupportedBy%in%s[,1])){
+						SupportedBy="All"
+					}	
+					else if(!any(SupportedBy%in%s[,1])){
+						SupportedBy="None"
+					}	
+					else{
+						if(any(SupportedBy=="-")){
+							SupportedBy=SupportedBy[-c(which(SupportedBy=="-"))]
+						}
+					}
+					if(length(Dels)>1&any(Dels=="-")){
+						Dels=Dels[-c(which(Dels=="-"))]
+					}
+					r=c("AS",paste(Dels,collapse="|"),paste(Jss,collapse="|"),paste(Jsse,collapse="|"),paste(SupportedBy,collapse="|"),"Fold Change",FC[e],EAnnotp)
+				}	
+				else{
+					r=c("AS",rep("-",4),"Fold Change",FC[e],EAnnotp)
+				}
+				
+			}
+			else{
+#				if(e%in%DataS[,2]&(!e%in%JAnnot[,2])){
+#					r=c("INI Filtered",rep("-",6))
+#				}
+				#else{
+				print(e)
+				#}
+			}
+			OutList[OutList[,2]==e,c(3:10)]=r
+		}
+		
+		L=matrix(0,ncol=3,nrow=nrow(Links))
+		for(i in 1:nrow(Links)){
+			r=Links[i,c(2)]
+			PSRs=strsplit(r,"-")[[1]]
+			L[i,]=c(Links[i,1],PSRs[1],PSRs[2])
+		}
+		
+		Table1=matrix(0,nrow=length(TRS)*2,ncol=4)
+		l=c()
+		for(i in 1:length(TRS)){
+			N=names(TRS)[i]	
+			l=c(l,L[which(L[,2]%in%names(TRS[[i]])&L[,3]%in%names(TRS[[i]])),1])
+			J=paste(L[which(L[,2]%in%names(TRS[[i]])&L[,3]%in%names(TRS[[i]])),1],collapse="|")
+			R1=paste(names(TRS[[i]]),collapse="|")
+			R2=paste(TRS[[i]],collapse="|")
+			Table1[i*2-1,]=c(TC,N,J,R1)
+			Table1[i*2,]=c(TC,N,J,R2)
+		}
+		l=unique(l)
+		if(any(!Links[,1]%in%l)){
+			NovelConnections=Links[which(!Links[,1]%in%l),1]
+			Novel=cbind(NovelConnections,Links[which(Links[,1]%in%NovelConnections),])
+			NovelConnections=cbind(TC,NovelConnections)
+		}	
+		else{
+			NovelConnections=c()
+		}
+		
+		
+		#utils::write.table(Table1, "Transcripts.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		#Transcripts per Groups
+		
+		GroupTranscripts=list()
+		for(g in 1:length(Groups)){
+			N=c()
+			GroupTranscripts[[g]]=list()
+			NeverPresent=which(sapply(Links[,g+2],function(x) all(x=="never")))
+			RLinks=Links[NeverPresent,,drop=FALSE]
+			#NeverLinkedPSR=list()
+			NeverLinkedTr=list()
+			if(nrow(RLinks)>0){
+				for(r in 1:nrow(RLinks)){
+					set=c()
+					for(t in unique(TrAnnot[,5])){
+						PSRset=TrAnnot[which(TrAnnot[,5]==t),2]
+						if(all(PSRs%in%PSRset)){
+							set=c(set,t)
+						}
+					}
+					#set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
+					NeverLinkedTr[[r]]=set
+					#set=strsplit(RLinks[r,1],"-")[[1]]
+					#NeverLinkedPSR[[r]]=set
+				}
+				NeverLinkedTr=unique(unlist(NeverLinkedTr))
+			}	
+			for(tr in unique(TrAnnot[,5])){
+				if(tr%in%NeverLinkedTr){
+					next
+				}
+				Set=TrAnnot[which(TrAnnot[,5]==tr),2]
+				PSet=Set[which(substr(Set,1,1)=="P")]
+				ESete=TrAnnot[which(TrAnnot[,5]==tr),4]
+				ESet=ESete[which(substr(Set,1,1)=="P")]
+				
+				
+				if(length(Low_GSamples[[g]])>0){
+					if(any(PSet%in%Low_GSamples[[g]])){
+						next
+					}
+				}
+				
+				if(Strand=="-"|Strand==-1){
+					PSet=rev(sort(PSet))
+					ESet=rev(sort(ESet))
+				}
+				
+				GroupTranscripts[[g]][[length(GroupTranscripts[[g]])+1]]=ESet	
+				N=c(N,tr)
+			}
+			names(GroupTranscripts[[g]])=N
+			
+		}
+		
+		Table2=matrix(0,nrow=length(TRS),ncol=(2+length(Groups)))
+		for(i in 1:length(TRS)){
+			N=names(TRS)[i]
+			Present=rep("no",length(Groups))
+			for(g in 1:length(Groups)){
+				if(N%in%names(GroupTranscripts[[g]])){
+					Present[g]="Yes"
+				}
+			}
+			Table2[i,]=c(TC,N,Present)
+		}
+		#utils::write.table(Table2, "Transcripts_Groups.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		
+		
+		if(Strand=="-"|Strand==-1){
+			OutList=OutList[nrow(OutList):1,]
+		}
+		
+		Decision=OutList[,3]
+		names(Decision)=OutList[,2]
+		C=names(Decision)[which(Decision=="Const")]
+		
+		
+		Category=rep("",nrow(OutList))
+		
+		for(r in 1:nrow(OutList)){
+			if(Decision[r]=="Const"){
+				Category[r]="-"
+				next
+			}
+			else if(Decision[r]=="not DABG"){
+				Category[r]="-"
+				next
+			}
+			PSR=as.character(OutList[r,2])
+			EAnnotp=TrAnnot[which(TrAnnot[,2]==PSR),,drop=FALSE]
+			if(nrow(EAnnotp)==0){
+				Category[r]="Intron Retention"	
+				next
+			}	
+			else{
+				Temp=c()
+				for(ea in 1:nrow(EAnnotp)){
+					OtherPSR=as.character(TrAnnot[which(TrAnnot[,4]==as.character(EAnnotp[ea,4])),2])
+					OtherPSR=OtherPSR[which(OtherPSR!=PSR)]
+					if(length(OtherPSR)>0){					
+						S=substr(OtherPSR,1,3)
+						Temp=c(Temp,OtherPSR[which(S=="PSR")])
+					}
+					else{
+						Temp=c(Temp,"")
+					}
+					
+				}
+				if(any(Temp!="")){
+					#exon has more than 1 probe set annotated to itself
+					Temp=unique(Temp)
+					if(any(Temp=="")){
+						Temp=Temp[-c(which(Temp==""))]
+					}
+					if(all(which(OutList[,2]%in%Temp)>r)&r==1){
+						Category[r]="Alternative First'"
+						next
+					}
+					else if(all(which(OutList[,2]%in%Temp)>r)){
+						Category[r]="Alternative 5'"
+						for(tra in 1:length(TRS)){
+							if(names(TRS[[tra]])[1]==PSR){
+								Category[r]="Alternative First"
+								break
+							}
+						}
+						next
+					}
+					else if(all(which(OutList[,2]%in%Temp)<r)&r==nrow(OutList)){
+						Category[r]="Alternative Last"
+						next
+					}
+					else if(all(which(OutList[,2]%in%Temp)<r)){
+						Category[r]="Alternative 3'"
+						for(tra in c(1:length(TRS))){
+							if(names(TRS[[tra]])[length(TRS[[tra]])]==PSR){
+								Category[r]="Alternative Last"
+								break
+							}
+						}
+						next
+					}
+					else{
+						Category[r]="Complex Event"
+						next
+					}
+					
+				}
+				else{
+					NeighboursIn=c()
+					NeighboursOut=c()
+					Positions=c()
+					for(tra in 1:length(TRS)){
+						if(length(TRS[[tra]])==0){
+							next
+						}
+						
+						if(names(TRS[[tra]])[1]==PSR){
+							Category[r]="Alternative First"
+							break
+						}
+						else if(names(TRS[[tra]])[length(TRS[[tra]])]==PSR){
+							Category[r]="Alternative Last"
+							break
+						}
+						else{
+							Pos=which(names(TRS[[tra]])==PSR)
+							if(length(Pos)>0){
+								Left=names(TRS[[tra]])[Pos-1]
+								Right=names(TRS[[tra]])[Pos+1]
+								NeighboursIn=c(NeighboursIn,Left,Right)	
+							}
+							else if(names(TRS[[tra]])[1]%in%OutList[,2]&names(TRS[[tra]])[length(TRS[[tra]])]%in%OutList[,2]){
+								if(which(OutList[,2]==names(TRS[[tra]])[1])<r&which(OutList[,2]==names(TRS[[tra]])[length(TRS[[tra]])])>r){				
+									F=c(names(TRS[[tra]]),PSR)
+									F=sort(F)
+									Pos=which(F==PSR)
+									Left=F[Pos-1]
+									Right=F[Pos+1]
+									NeighboursOut=c(NeighboursOut,Left,Right)	
+								}
+							}
+							
+						}
+						
+					}
+					
+					if(Category[r]==""){
+						if(length(NeighboursIn)>0&length(NeighboursOut)>0){
+							NIN=sort(unique(NeighboursIn))
+							NOUT=sort(unique(NeighboursOut))
+							
+							if(length(NIN)==2&length(NOUT)==2){
+								if(all(NIN%in%NOUT)){
+									if(Decision[OutList[which(OutList[,2]==NIN[1]),2]]=="Const"&Decision[OutList[which(OutList[,2]==NIN[2]),2]]=="Const"){
+										Category[r]="Cassette Exon"
+									}
+									else{
+										Category[r]="Complex Event"
+									}
+								}
+								
+								else if(NIN[1]==NOUT[1]&NOUT[2]==OutList[r+1,2]&NIN[2]!=OutList[r+1,2]){
+									if(r<(length(Decision)-2)){
+										if(Decision[OutList[r+2,2]]=="Const"){
+											Category[r]="Mutually Exclusive Exon"
+										}
+										else{
+											Category[r]="Complex Event"
+										}
+									}
+									else{
+										Category[r]="Complex Event"
+									}
+								}
+								
+								else if(NIN[2]==NOUT[2]&NOUT[1]==OutList[r-1,2]&NIN[1]!=OutList[r-1,2]){
+									if(r>2){
+										if(Decision[OutList[r-2,2]]=="Const"){
+											Category[r]="Mutually Exclusive Exon"
+										}	
+										else{
+											Category[r]="Complex Event"
+										}
+									}
+									else{
+										Category[r]="Complex Event"
+									}
+									
+									
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+							}
+							else{
+								Category[r]="Complex Event"
+							}
+						}
+						else if(length(NeighboursIn)>0){
+							NIN=sort(unique(NeighboursIn))
+							if(length(NIN)==2){
+								if(NIN[1]%in%OutList[,2]&NIN[2]%in%OutList[,2]){
+									if(Decision[OutList[which(OutList[,2]==NIN[1]),2]]=="Const"&Decision[OutList[which(OutList[,2]==NIN[2]),2]]=="Const"){
+										Category[r]="Cassette Exon"
+									}
+									else{
+										Category[r]="Complex Event"
+									}
+								}
+								else{
+									Category[r]="Complex Event"
+								}
+							}
+							else{
+								Category[r]="Complex Event"
+							}
+						}	
+						else{
+							Category[r]="Complex Event"
+						}
+					}
+					else{
+						next
+					}
+				}
+			}
+		}
+		
+		if(Plot){		
+			#pdf("Figures/Tr_TC17001298.pdf",width=18,height=10)
+			graphics::par(mfrow=c(2,1))
+			graphics::par(mar=c(12,1,1,1))
+			for(g in 2:3){
+				if(Strand=="-"|Strand==-1){
+					R=G[[g]][which(rownames(G[[g]])=="R"),]
+					R=R[nrow(R):1,c(2,1)]
+					E=G[[g]][which(rownames(G[[g]])=="E"),]
+					E=E[nrow(E):1,c(2,1)]
+					G1=rbind(R,E)
+					
+					C1=rev(Cols[[g]][which(rownames(G[[g]])=="R")])
+					C2=rev(Cols[[g]][which(rownames(G[[g]])=="E")])
+					C=c(C1,C2)
+					
+					arcplot(G1,lwd.arcs=rev(Widths[[g]])+1,above=NULL,col.arcs=C,ljoin = 2,lend=2,pch.nodes=15,cex.nodes=2,cex.labels=1.2,col.nodes=rev(ColN[[g]]))
+				}
+				else{
+					arcplot(G[[g]],lwd.arcs=Widths[[g]],above=NULL,col.arcs=Cols[[g]],ljoin = 2,lend=2,pch.nodes=15,cex.nodes=2,cex.labels=1.5,col.nodes=ColN[[g]])
+				}
+			}
+			#dev.off()
+		}
+		#warnings()
+		OutList=cbind(OutList,Category)
+		#utils::write.table(OutList, paste(Name,".txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		#rm(OutList)
+		#gc() 
+		output=list("Output"=OutList,"Compositions"=Table1,"GroupTranscripts"=Table2,"NovelConnections"=NovelConnections)
+		if(!is.null(Location)){
+	
+			#save(output, file=paste(Location,"/REIDS_IsoformInfo_", geneID, ".RData", sep=""))
+			if(!is.null(output[[1]])){
+				utils::write.table(output[[1]], paste(Location,"/",Name,"_ASInfo.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			}
+			if(!is.null(output[[2]])){
+				utils::write.table(output[[2]], paste(Location,"/",Name,"_Compositions.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+			
+			}
+			if(!is.null(output[[3]])){
+				utils::write.table(output[[3]], paste(Location,"/",Name,"_GroupTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			}
+			if(!is.null(output[[4]])){
+				utils::write.table(output[[4]], paste(Location,"/",Name,"_NovelConnections.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)	
+			}
+			rm(output)
+			gc()
+			close(conn)
+			return(paste(geneID," Completed"))
+		}
+		else{
+			close(conn)
+			return(output)
+		}
+
+	}	
+	close(conn)
+}
+	
+
+#' REIDSJunctionAssessment_HPCVersion
+#' 
+#' REIDSJunctionAssessment_HPCVersion is the HPC version of REIDSJunctionAssessment. This function should be used with the REIDSJunctionAssessment_HPCVersion.R file and REIDSJunctionAssessment_HPCVersion.pbs script in the documentation folder of the package.
+#' After running this function on the cluster, the output files should be binded together with the CreateOutput function.
+#' @export
+#' @param geneID The gene ID.
+#' @param DataS The data with as rows the probesets and as columns the samples. Note that the first column should contain the gene IDs and the second column the exon IDs
+#' @param ASPSR The AS probe sets as identified by ASExons.
+#' @param Juninfo A parameter specifying wether the annotations are user of Ensembl defined. If JunInfo is "User" (default) the annotations provided in EandTrAnnot are used. If JunInfo is "Ensembl" the annotations in EandTrAnnot are used to set up tje junction associations but the gene name and position in transcriptData and positionData are used to connect with the Ensembl data base and retrieve corresponding information. 
+#' @param JAnnotI The file name with line indices for the junction associations.
+#' @param JAnnot The file name with the junction associations.
+#' @param EandTrAnnotI The file name with line indices for the exon and isoform annotations.
+#' @param EandTrAnnot The file name with the exon and isoform annotations.
+#' @param PartiallyAnnotated Logical. Should the exon annotations with partially annotated probe sets still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param positionData The file with the chromosome start and ends for the probe sets. Only needed in JunInfo=Ensembl.
+#' @param transcriptData The file with gene name of the transcripts. Only needed in JunInfo=Ensembl.
+#' @param Groups A list with  elements speficifing the columns of the data in each group.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
+#' @param Plot Should a plot of the gene model be made?
+#' @details The plot is produced by the arcplot function of the arcdiagram package (https://github.com/gastonstat/arcdiagram)
+#' @return A .RData file will be saved for each gene with the four elements returned REIDSJunctionAssessment function. The outputs can be bound together by CreateOutput.
+REIDSJunctionAssessment_HPCVersion<-function(geneID,DataS=DataS,ASPSR=ASPSR,Juninfo="User",JAnnotI,JAnnot=NULL,EandTrAnnotI=NULL,EandTrAnnot=NULL,PartiallyAnnotated,positionData=NULL,transcriptData=NULL,Groups=list(),Low_AllSamples=c(),Low_GSamples=c(),Plot=FALSE){
+
+	if(!is.null(EandTrAnnotI)){
+		ETrI=utils::read.table(EandTrAnnotI,header=FALSE,stringsAsFactors=FALSE)
+		Lines=ETrI[which(ETrI[,1]==geneID),]
+		ETrAnnot=utils::read.table(EandTrAnnot,header=FALSE,sep="\t",nrows=as.numeric(Lines[3]),skip=as.numeric(Lines[2]),stringsAsFactors=FALSE)
+		TrAnnot=ETrAnnot[,c(1,2,8,4,7)]
+		TrAnnot=TrAnnot[order(TrAnnot[,2]),]
+		colnames(TrAnnot)=c("TC_ID","PSR_ID","strand","EAnnot","TrAnnot")
+		
+		if(!PartiallyAnnotated){
+			Incl=unlist(sapply(TrAnnot[,4],function(x) !grepl("[*]",x)))
+			TrAnnot=TrAnnot[Incl,]
+		}
+		
+		
+		if(!is.null(JAnnotI)){
+			JI=utils::read.table(JI,header=FALSE)
+			Lines=JI[which(JI[,1]==geneID),]
+			JAnnot=utils::read.table(EandTrAnnot,header=FALSE,sep="\t",nrows=as.numeric(Lines[3]),skip=as.numeric(Lines[2]),stringsAsFactors=FALSE)		
+		}
+		else{
+			
+			JEAnnot=ETrAnnot[,-c(5,6,7)]
+			JEAnnot=JEAnnot[!duplicated(JEAnnot),]
+			JEAnnot=JEAnnot[order(JEAnnot[,2]),]
+			JUCs=which(sapply(JEAnnot[,2],function(x) substr(x,1,1)=="J"))
+			JUC=JEAnnot[JUCs,]
+			PSR=JEAnnot[-c(JUCs),]
+			
+			
+			Incl=unlist(sapply(JUC[,4],function(x) !grepl("[*]",x)))
+			JUC=JUC[Incl,]
+			
+			if(!PartiallyAnnotated){
+				Incl=unlist(sapply(PSR[,4],function(x) !grepl("[*]",x)))
+				PSR=PSR[Incl,]
+			}
+			
+			J=unique(JUC[,2])
+			JAnnot=c()
+			for(j in J){
+					
+					PSR3_Final=""
+					PSR5_Final=""
+					
+					#Side 3 annots
+					SubJ=JUC[which(JUC[,2]==j&JUC[,3]==3), ]
+					TC=SubJ[1,1]
+					Strand=SubJ[1,5]
+					
+					Es=unique(SubJ[,4])
+					PSRs3=PSR[which(PSR[,4]%in%Es), ]
+					
+					Count=table(PSRs3[,2])
+					PSR3=names(Count)[which.min(table(PSRs3[,2])-length(Es))]
+					PSRs3temp=PSR[which(PSR[,2]%in%PSR3), 2]
+					
+					if((Strand=="-"|Strand==-1|Strand=="-1.0") & length(PSRs3temp)>0){
+						PSR3_Final=PSRs3temp[1]
+					}			
+					else if((Strand=="+"|Strand==1|Strand=="1.0") & length(PSRs3temp)>0){
+						PSR3_Final=PSRs3temp[length(PSRs3temp)]
+					}	
+					Row=c(TC,PSR3_Final,j,"3")
+					JAnnot=rbind(JAnnot,Row)
+					
+					#Side 5 annots
+					SubJ=JUC[which(JUC[,2]==j&JUC[,3]==5), ]
+					TC=SubJ[1,1]
+					Strand=SubJ[1,5]
+					
+					Es=unique(SubJ[,4])
+					PSRs5=PSR[which(PSR[,4]%in%Es), ]
+					
+					Count=table(PSRs5[,2])				
+					PSR5=names(Count)[which.min(table(PSRs5[,2])-length(Es))]
+					PSRs5temp=PSR[which(PSR[,2]%in%PSR5), 2]
+					
+					if((Strand=="-"|Strand==-1|Strand=="-1.0") & length(PSRs5temp)>0){
+						PSR5_Final=PSRs5temp[length(PSRs5temp)]
+					}			
+					else if((Strand=="+"|Strand==1|Strand=="1.0") & length(PSRs5temp)>0){
+						PSR5_Final=PSRs5temp[1]
+					}	
+					Row=c(TC,PSR5_Final,j,"5")
+					JAnnot=rbind(JAnnot,Row)
+					
+					#exclusions
+					I1=0
+					I2=0
+					if(PSR3_Final!="" & PSR5_Final!="" & (Strand=="+"|Strand==1|Strand=="1.0")){
+						I1=which(PSR[,2]==PSR3_Final)[length(which(PSR[,2]==PSR3_Final))]
+						I2=which(PSR[,2]==PSR5_Final)[1]
+					}
+					else if(PSR3_Final!="" & PSR5_Final!="" & (Strand=="-"|Strand==-1|Strand=="-1.0")){
+						I1=which(PSR[,2]==PSR5_Final)[length(which(PSR[,2]==PSR5_Final))]
+						I2=which(PSR[,2]==PSR3_Final)[1]
+					}
+					if(I1!=0&I2!=0&I1!=(I2+1)&I2!=(I1+1)){
+						if(I1<I2){
+							R=seq(I1+1,I2,1)
+						}
+						else if(I1>I2){
+							R=seq(I1-1,I2,-1)
+						}
+						ExclPSR_temp=PSR[R,]
+						Exrows=nrow(ExclPSR_temp)
+						
+						if(Exrows!=0){
+							ExclPSR=unique(ExclPSR_temp[,2])
+							if(any(is.na(ExclPSR))){
+								ExclPSR=ExclPSR[-c(which(is.na(ExclPSR)))]
+							}
+							for(e in ExclPSR){
+								if(e!=PSR5_Final & e!=PSR3_Final){
+									Row=c(TC,e,j,"exclusion")
+									JAnnot=rbind(JAnnot,Row)
+								}
+								
+							}
+						}
+					}
+					
+				}
+				if(!is.null(JAnnot)){
+				JAnnot=JAnnot[order(JAnnot[,2]),]
+				colnames(JAnnot)=c("TC_ID","PSR_ID","JUC_ID","as_type")			
+				JAnnot[,1]=as.character(JAnnot[,1])
+				JAnnot[,2]=as.character(JAnnot[,2])
+				JAnnot[,3]=as.character(JAnnot[,3])
+				JAnnot[,4]=as.character(JAnnot[,4])
+			}
+			else{
+				JAnnot=c()
+			}
+		}
+		if(Juninfo=="Ensemble"){
+			ensembl = useMart(biomart="ENSEMBL_MART_ENSEMBL", host="grch37.ensembl.org", path="/biomart/martservice" ,dataset="hsapiens_gene_ensembl")
+			attributes.region<- c("chromosome_name", "start_position", "end_position", "ensembl_gene_id")							
+			filter.symbol<- "hgnc_symbol"
+			
+			TrAnnot=c()
+			
+			trim <- function(s, ...) {
+				s <- as.character(s);
+				s <- sub("^[\t\n\f\r[:punct:]  ]*", "", s);
+				s <- sub("[\t\n\f\r ]*$", "", s);
+				s;
+			} 
+			
+			trans=paste(geneID,".hg",sep="")
+			exons=positionData[positionData$transcript_cluster_id == trans, "probeset_id"]
+			
+			PSR=sapply(exons, function(x) substr(x,1,3)!="JUC")
+			exons=exons[PSR]
+			trans=paste(trans,".1",sep="")
+			symbol.to.annotate <- AnnotateGenes(trans,transcriptData)$symbol # get HBC identity
+			if(all(symbol.to.annotate!="---")){
+				ensembl.output     <- AnnotateGeneSymbol(symbol.to.annotate) # get region
+				if(nrow(ensembl.output) > 0){
+					gene  = makeGene(id = ensembl.output$ensembl_gene_id, biomart = ensembl)
+					
+					strand <- transcriptData[transcriptData[,1] == trans,][2]
+					gene.positions   <- transcriptData[transcriptData$probeset_id %in% exons,]
+					gene.positions$start=as.numeric(gene.positions$start)
+					gene.positions$stop=as.numeric(gene.positions$stop)
+					gene.positions<-gene.positions[order(gene.positions$start,decreasing=FALSE),]
+					gene.positions[,1]=sapply(gene.positions[,1],function(x) strsplit(x,"[.]")[[1]][1])
+					PSR=gene.positions[,1]
+					G=gene@ens
+					for(p in PSR){
+						Start=gene.positions[which(gene.positions[,1]==p),3]
+						Stop=gene.positions[which(gene.positions[,1]==p),4]
+						for(r in 1:nrow(G)){
+							if(G[r,4]<=Start&G[r,5]>=Stop){
+								Row=c(geneID,p,strand,G[r,3],G[r,2])
+								TrAnnot=rbind(TrAnnot,Row)
+							}
+						}
+					}
+					
+					if(is.null(TrAnnot)){
+						TrAnnot=c()
+					}
+					else{
+						colnames(TrAnnot)=c("TC_ID","PSR_ID","strand","EAnnot","TrAnnot")
+						
+						TrAnnot=as.data.frame(TrAnnot)
+						TrAnnot[,1]=as.character(TrAnnot[,1])
+						TrAnnot[,2]=as.character(TrAnnot[,2])
+						TrAnnot[,3]=as.character(TrAnnot[,3])
+						TrAnnot[,4]=as.character(TrAnnot[,4])
+						TrAnnot[,5]=as.character(TrAnnot[,5])
+						TrAnnot=as.matrix(TrAnnot)
+					}
+					
+				}
+				else{
+					TrAnnot=c()
+				}
+			}
+			else{
+				TrAnnot=c()
+			}
+		}
+		
+	}
+	else{
+		ETrAnnot=c()
+		JAnnot=c()
+	}
+	
+	if(length(JAnnot)==0|length(TrAnnot)==0){
+		
+		output=paste(geneID,"No valuable isoform composition information available",sep="\t")
+		
+		return(output)
+		
+	}
 	
 	
 	colnames(DataS)[2]="ExonID"
-	if(any(is.na(JAnnot$PSR_ID))){
-		D=which(is.na(JAnnot$PSR_ID))
+	if(any(is.na(JAnnot[,2]))){
+		D=which(is.na(JAnnot[,2]))
 		JAnnot=JAnnot[-c(D),]
 	}
 	
@@ -1334,6 +3434,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 	
 	GroupData=list()
 	DelJ=c()
+	Rem=c()
 	for(g in 1:length(Groups)){
 		
 		GData=DataS[,c(1,2,Groups[[g]]+2)]
@@ -1425,26 +3526,52 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 					#print(length(Flagged))
 					if(length(Flagged)>length(StopDel)){
 						Flagged=names(sort(FlagP)[1:StopDel])
+						Rem=c(Rem,Flagged)
 					}
-					GData=GData[-c(which(rownames(GData)%in%Flagged)),]
+					#GData=GData[-c(which(rownames(GData)%in%Flagged)),]
 				}
 			}
 		}
 		
-		GroupData[[g]]=GData			
+		
 	}
 	
+	if(length(Rem)>0){
+		if(any(is.na(Rem))){
+			Rem=Rem[-c(which(is.na(Rem)))]
+		}
+		if(length(Rem)>0){
+			for(g in 1:length(Groups)){
+				GData=DataS[,c(1,2,Groups[[g]]+2)]
+				GData=GData[-c(which(rownames(GData)%in%Rem)),]
+				GroupData[[g]]=GData	
+			}
+		}
+		else{
+			for(g in 1:length(Groups)){
+				GData=DataS[,c(1,2,Groups[[g]]+2)]
+				GroupData[[g]]=GData	
+			}
+		}
+	}
+	else{
+		for(g in 1:length(Groups)){
+			GData=DataS[,c(1,2,Groups[[g]]+2)]
+			GroupData[[g]]=GData	
+		}
+	}
 	
-	print(x)	
+	print(geneID)	
 	
 	DelJuncs=names(which(table(DelJ)==length(Groups)))
-	Jucs=unique(JAnnot$JUC_ID)[which(!is.na(unique(JAnnot$JUC_ID)))]
+	Jucs=unique(JAnnot[,3])[which(!is.na(unique(JAnnot[,3])))]
 	
 	
 	DABGPSR=unique(PSRsExons)[which(unique(PSRsExons)%in%Low_AllSamples)]
 	if(length(DABGPSR)>0){
 		PSRsExons=PSRsExons[-c(which(PSRsExons%in%DABGPSR))]
 	}
+	
 	Const=unique(PSRsExons)[which(!unique(PSRsExons)%in%ASPSR)]
 	AS=unique(PSRsExons)[which(unique(PSRsExons)%in%ASPSR)]
 	JAsses=data.frame(matrix(0,nrow=length(Jucs),ncol=(3+length(Groups))))
@@ -1510,7 +3637,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 				names(JValues)=j
 			}
 			
-			Set=sort(JAnnot[which(JAnnot$JUC_ID==j&(JAnnot$as_type!="exclusion")),2])
+			Set=sort(JAnnot[which(JAnnot[,3]==j&(JAnnot[,4]!="exclusion")),2])
 			L=list()
 			D=list()
 			if(!all(Set%in%DataS$ExonID)){
@@ -1559,13 +3686,13 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 						Select=which(I<=t)
 						if(length(Select)<t){
 							Add=t-length(Select)
-							SelectAdd=which((I>t)&(I<=(t+Add)))[Add]
+							SelectAdd=which((I>t)&(I<=(t+Add)))[c(1:Add)]
 							Select=c(Select,SelectAdd)
 						}
 						else if(length(Select)>t){
 							Del=length(Select)-t
-							SelectDel=which(Select>=t)[Del]
-							Select=Select[-c(Del)]
+							SelectDel=which(Select>=t)[c(1:Del)]
+							Select=Select[-c(SelectDel)]
 						}
 						NewC=temp[Select,c1]
 						Dnew=cbind(Dnew,NewC)
@@ -1618,7 +3745,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 			}
 			
 			#Junction Value Assessment
-			Set=sort(JAnnot[which(JAnnot$JUC_ID==j&(JAnnot$as_type!="exclusion")),2])
+			Set=sort(JAnnot[which(JAnnot[,3]==j&(JAnnot[,4]!="exclusion")),2])
 #				
 			#Flat line
 			tissuetemp=c()
@@ -1662,12 +3789,12 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		for(r in 1:nrow(JAsses)){
 			R=JAsses[r,]
 			J=as.character(JAsses[r,1])
-			PSRs=unique(JAnnot$PSR_ID[which(JAnnot$JUC_ID==J)])
-			supp=sort(JAnnot$PSR_ID[which(JAnnot$PSR_ID%in%PSRs&JAnnot$JUC_ID==J&JAnnot$as_type!="exclusion")])
+			PSRs=unique(JAnnot[,2][which(JAnnot[,3]==J)])
+			supp=sort(JAnnot[,2][which(JAnnot[,2]%in%PSRs&JAnnot[,3]==J&JAnnot[,4]!="exclusion")])
 			if(!all(supp%in%DataS$ExonID)){
 				supp=supp[-c(which(!supp%in%DataS$ExonID))]
 			}
-			excl=sort(JAnnot$PSR_ID[which(JAnnot$PSR_ID%in%PSRs&JAnnot$JUC_ID==J&JAnnot$as_type=="exclusion")])
+			excl=sort(JAnnot[,2][which(JAnnot[,2]%in%PSRs&JAnnot[,3]==J&JAnnot[,4]=="exclusion")])
 			if(!all(excl%in%DataS$ExonID)){
 				excl=excl[-c(which(!excl%in%DataS$ExonID))]
 			}
@@ -1738,10 +3865,13 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 	
 	Edges=c()
 	#Exons first
-	Exons=sort(unique(c(unique(JAnnot$PSR_ID),c(unique(PSRsExons),unique(DABGPSR)))))
+	Exons=sort(unique(c(unique(JAnnot[,2]),c(unique(PSRsExons),unique(DABGPSR)))))
 	Exons=Exons[which(Exons%in%DataS[,2])]
 	if(length(Exons)==0){
-		return(c("No PSR's present"))
+		output=paste(geneID,"No PSR's present",sep="\t")
+		
+		return(output)
+		
 	}
 	for(i in 1:(length(Exons)-1)){
 		R=c(Exons[i],Exons[i+1])
@@ -1834,7 +3964,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		ColN[[g]]=colNodes			
 	}
 	for(c in Exons){
-		if(c%in%DABG){
+		if(c%in%DABGPSR){
 			for(g in c(1:length(Groups)+1)){
 				ColN[[g]][c]="grey"
 			}	
@@ -1872,10 +4002,20 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 	if(length(NeverPresent)>0){
 		RLinks=Links[NeverPresent,,drop=FALSE]		
 		for(r in 1:nrow(RLinks)){
-			set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
-			#set=strsplit(RLinks[r,2],"-")[[1]]		
-			#NeverLinkedPSR[[r]]=set
+			PSR=RLinks[r,2]
+			PSRs=strsplit(PSR,"-")[[1]]
+			set=c()
+			for(t in unique(TrAnnot[,5])){
+				PSRset=TrAnnot[which(TrAnnot[,5]==t),2]
+				if(all(PSRs%in%PSRset)){
+					set=c(set,t)
+				}
+			}
 			NeverLinkedTr[[r]]=set
+#			set=TrAnnot[which(TrAnnot[,2]==RLinks[r,1]),5]
+#			#set=strsplit(RLinks[r,2],"-")[[1]]		
+#			#NeverLinkedPSR[[r]]=set
+#			NeverLinkedTr[[r]]=set
 		}
 		NeverLinkedTr=unique(unlist(NeverLinkedTr))
 	}
@@ -1883,16 +4023,16 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 	
 	#Event Type
 	TC=DataS[1,1]
-	Strand=Transcripts[1,3]
+	Strand=TrAnnot[1,3]
 	TRS=list()
 	N=c()
-	for(tr in unique(Transcripts[,5])){
+	for(tr in unique(TrAnnot[,5])){
 		if(tr%in%NeverLinkedTr){
 			next
 		}
-		Set=Transcripts[which(Transcripts[,5]==tr),2]
+		Set=TrAnnot[which(TrAnnot[,5]==tr),2]
 		PSet=Set[which(substr(Set,1,1)=="P")]
-		ESete=Transcripts[which(Transcripts[,5]==tr),4]
+		ESete=TrAnnot[which(TrAnnot[,5]==tr),4]
 		ESet=ESete[which(substr(Set,1,1)=="P")]
 #			Remove=FALSE
 #			if(length(NeverLinkedPSR)>0){
@@ -1908,14 +4048,19 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 #				}
 #			}
 		if(length(DABGPSR)>0){
+			Stop=FALSE
 			for(d in DABGPSR){
 				if(any(PSet==d)){
-					next
+					Stop=TRUE
+					break					
 				}
-			}	
+			}
+			if(Stop){
+				next
+			}
 		}
 		
-		if(Strand=="-"){
+		if(Strand=="-"|Strand==-1){
 			PSet=rev(sort(PSet))
 			ESet=rev(sort(ESet))
 		}
@@ -1924,22 +4069,28 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		N=c(N,tr)
 	}
 	names(TRS)=N
+	if(length(TRS)==0){
+		
+		output=list("Output"=OutList)
+		
+		return(output)
 	
+	}
 	
 	AllExons=unique(unlist(TRS))		
 	for(e in Exons){
-		EAnnotp=EAnnot[which(EAnnot[,2]==e),4]
+		EAnnotp=TrAnnot[which(TrAnnot[,2]==e),4]
 		EAnnotp=EAnnotp[which(EAnnotp%in%AllExons)]
 		EAnnotp=paste(EAnnotp,collapse="|")
-		s=JAnnot[which(JAnnot$PSR_ID==e),c(3,4)]
+		s=JAnnot[which(JAnnot[,2]==e),c(3,4),drop=FALSE]
 		Dels=s[which(s[,1]%in%DelJ),1]
 		if(length(Dels)>0){
-			s=s[which(!s[,1]%in%DelJ),]
+			s=s[which(!s[,1]%in%DelJ),,drop=FALSE]
 		}
 		else{
 			Dels="-"
 		}
-		if(e%in%DABG){
+		if(e%in%DABGPSR){
 			r=c("not DABG",rep("-",6),EAnnotp)
 		}
 		
@@ -2149,18 +4300,36 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		OutList[OutList[,2]==e,c(3:10)]=r
 	}
 	
-	OutList[,9]=as.numeric(OutList[,9])
+	L=matrix(0,ncol=3,nrow=nrow(Links))
+	for(i in 1:nrow(Links)){
+		r=Links[i,c(2)]
+		PSRs=strsplit(r,"-")[[1]]
+		L[i,]=c(Links[i,1],PSRs[1],PSRs[2])
+	}
 	
-	
-	Table1=matrix(0,nrow=length(TRS)*2,ncol=3)
+	Table1=matrix(0,nrow=length(TRS)*2,ncol=4)
+	l=c()
 	for(i in 1:length(TRS)){
-		N=names(TRS)[i]
+		N=names(TRS)[i]	
+		l=c(l,L[which(L[,2]%in%names(TRS[[i]])&L[,3]%in%names(TRS[[i]])),1])
+		J=paste(L[which(L[,2]%in%names(TRS[[i]])&L[,3]%in%names(TRS[[i]])),1],collapse="|")
 		R1=paste(names(TRS[[i]]),collapse="|")
 		R2=paste(TRS[[i]],collapse="|")
-		Table1[i*2-1,]=c(TC,N,R1)
-		Table1[i*2,]=c(TC,N,R2)
+		Table1[i*2-1,]=c(TC,N,J,R1)
+		Table1[i*2,]=c(TC,N,J,R2)
 	}
-	utils::write.table(Table1, "Transcripts.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	l=unique(l)
+	if(any(!Links[,1]%in%l)){
+		NovelConnections=Links[which(!Links[,1]%in%l),1]
+		Novel=cbind(NovelConnections,Links[which(Links[,1]%in%NovelConnections),])
+		NovelConnections=cbind(TC,NovelConnections)
+	}	
+	else{
+		NovelConnections=c()
+	}
+	
+	
+	#utils::write.table(Table1, "Transcripts.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
 	#Transcripts per Groups
 	
 	GroupTranscripts=list()
@@ -2173,20 +4342,27 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		NeverLinkedTr=list()
 		if(nrow(RLinks)>0){
 			for(r in 1:nrow(RLinks)){
-				set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
+				set=c()
+				for(t in unique(TrAnnot[,5])){
+					PSRset=TrAnnot[which(TrAnnot[,5]==t),2]
+					if(all(PSRs%in%PSRset)){
+						set=c(set,t)
+					}
+				}
+				#set=Transcripts[which(Transcripts[,2]==RLinks[r,1]),5]
 				NeverLinkedTr[[r]]=set
 				#set=strsplit(RLinks[r,1],"-")[[1]]
 				#NeverLinkedPSR[[r]]=set
 			}
 			NeverLinkedTr=unique(unlist(NeverLinkedTr))
 		}	
-		for(tr in unique(Transcripts[,5])){
+		for(tr in unique(TrAnnot[,5])){
 			if(tr%in%NeverLinkedTr){
 				next
 			}
-			Set=Transcripts[which(Transcripts[,5]==tr),2]
+			Set=TrAnnot[which(TrAnnot[,5]==tr),2]
 			PSet=Set[which(substr(Set,1,1)=="P")]
-			ESete=Transcripts[which(Transcripts[,5]==tr),4]
+			ESete=TrAnnot[which(TrAnnot[,5]==tr),4]
 			ESet=ESete[which(substr(Set,1,1)=="P")]
 			
 			
@@ -2196,7 +4372,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 				}
 			}
 			
-			if(Strand=="-"){
+			if(Strand=="-"|Strand==-1){
 				PSet=rev(sort(PSet))
 				ESet=rev(sort(ESet))
 			}
@@ -2219,10 +4395,10 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		}
 		Table2[i,]=c(TC,N,Present)
 	}
-	utils::write.table(Table2, "Transcripts_Groups.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	#utils::write.table(Table2, "Transcripts_Groups.txt", sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
 	
 	
-	if(Strand=="-"){
+	if(Strand=="-"|Strand==-1){
 		OutList=OutList[nrow(OutList):1,]
 	}
 	
@@ -2243,7 +4419,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 			next
 		}
 		PSR=as.character(OutList[r,2])
-		EAnnotp=EAnnot[which(EAnnot[,2]==PSR),]
+		EAnnotp=TrAnnot[which(TrAnnot[,2]==PSR),,drop=FALSE]
 		if(nrow(EAnnotp)==0){
 			Category[r]="Intron Retention"	
 			next
@@ -2251,7 +4427,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		else{
 			Temp=c()
 			for(ea in 1:nrow(EAnnotp)){
-				OtherPSR=as.character(EAnnot[which(EAnnot[,4]==as.character(EAnnotp[ea,4])),2])
+				OtherPSR=as.character(TrAnnot[which(TrAnnot[,4]==as.character(EAnnotp[ea,4])),2])
 				OtherPSR=OtherPSR[which(OtherPSR!=PSR)]
 				if(length(OtherPSR)>0){					
 					S=substr(OtherPSR,1,3)
@@ -2307,6 +4483,10 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 				NeighboursOut=c()
 				Positions=c()
 				for(tra in 1:length(TRS)){
+					if(length(TRS[[tra]])==0){
+						next
+					}
+					
 					if(names(TRS[[tra]])[1]==PSR){
 						Category[r]="Alternative First"
 						break
@@ -2424,7 +4604,7 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 		graphics::par(mfrow=c(2,1))
 		graphics::par(mar=c(12,1,1,1))
 		for(g in 2:3){
-			if(Strand=="-"){
+			if(Strand=="-"|Strand==-1){
 				R=G[[g]][which(rownames(G[[g]])=="R"),]
 				R=R[nrow(R):1,c(2,1)]
 				E=G[[g]][which(rownames(G[[g]])=="E"),]
@@ -2445,35 +4625,418 @@ JunInfo<-function(x,ASPSR,JLines,TrLines,ELines,DataS,Groups,Low_AllSamples=c(),
 	}
 	#warnings()
 	OutList=cbind(OutList,Category)
-	utils::write.table(OutList, paste(Name,".txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
-	rm(OutList)
-	gc() 
-	#return(list("Output"=OutList,"Transcripts"=GroupTranscripts,"PlotInfo"=list(G,Widths,Cols)))
-}
-
+	#utils::write.table(OutList, paste(Name,".txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+	#rm(OutList)
+	#gc() 
+	output=list("ASInfo"=OutList,"Compositions"=Table1,"GroupTranscripts"=Table2,"NovelConnections"=NovelConnections)
+	
+	return(output)
+	
+}	
+	
 
 #' REIDS_JunctionAssessment
 #' 
 #' The REIDS_JunctionAssessment functions assess identified AS exons based on their 5'end and 3'end and exclusion junction support.
 #' @export
+#' @param Indices The .csv file created by Line_Indexer.py which contains indices for every gene in geneIDs.
+#' @param DataFile The .csv file created by PivotTransformation. 
 #' @param ASProbeSets The AS probe sets as identified by ASExons.
-#' @param JAnnotI A table with the line indexing for the juncion associations.
-#' @param EAnnotI A table with the line indexing for the exon annotations.
-#' @param TrAnnotI A table with the line indexing for the transcript annotations.
-#' @param Data The probe level data.
+#' @param Juninfo A parameter specifying wether the annotations are user of Ensembl defined. If JunInfo is "User" the annotations provided in EandTrAnnot are used. If JunInfo is "Ensembl" the annotations in EandTrAnnot are used to set up tje junction associations but the gene name and position in transcriptData and positionData are used to connect with the Ensembl data base and retrieve corresponding information. 
+#' @param JAnnotI The file name with line indices for the junction associations.
+#' @param JAnnot The file name with the junction associations.
+#' @param EandTrAnnotI The file name with line indices for the exon and isoform annotations.
+#' @param EandTrAnnot The file name with the exon and isoform annotations.
+#' @param PartiallyAnnotated Logical. Should the exon annotations with partially annotated probe sets still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param positionData The file with the chromosome start and ends for the probe sets. Only needed in JunInfo=Ensembl.
+#' @param transcriptData The file with gene name of the transcripts. Only needed in JunInfo=Ensembl.
 #' @param Groups A list with  elements speficifing the columns of the data in each group.
 #' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
 #' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
-#' @param Name A character string with the name of the ouput file.
-#' @return The function returns three files. The first file has name "Name.txt" and contains a line per probe set. It shows the reached decision
-#' regarding the probe set (const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The second
-#' file is a list of all found transcripts for a particular TC ID. The third file indicates whether a specific transcript is present or absent in a group.
-REIDS_JunctionAssesment<-function(ASProbeSets=c(),JAnnotI,EAnnotI,TrAnnotI,Data,Groups=list(c(3,4,5),c(6,7,8)),Low_AllSamples=c(),Low_GSamples=c(),Name){
+#' @param Location A character string indication the place where the outputs are saved.
+#' @param Name A character string with the name of the ouput file. Defaults to "REIDS_Jun".
+#' @return The function returns four files. The first file has name "Name_ASInfo.txt" and contains a line per probe set. It shows the reached decisionregarding the probe set (Const/AS/not DABG),its linking and exclusion junctions, the fold change, the AS type and its annotated exons. The secondfile, "Name_Compositions.txt", is a list of all found transcripts for a particular TC ID. The third file,"Name_GroupTranscripts.txt" indicates whether a specific transcript is present or absent in a group. The fourth file "Name_NovelConnections.txt" contains junctions which are showing an undocumented connection between probe sets.
+#' @examples
+#' \dontrun{
+#' data(TC1500264)
+#' PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+#' REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+#' REIDSFunction(ASPSR=c(), Indices="Output/TC1500264_LineIndex.csv",
+#' DataFile="Output/TC1500264_Pivot.csv",nsim=50,informativeCalls=FALSE,Summarize=
+#' c("WeightedAll","EqualAll"),rho=0.5,Low_AllSamples=c(),Groups=list(c(1:3),c(4:6)),
+#' Location="Output",Name="TC1500264")
+#' 
+#' TC1500264_1vs2=ASExons(ExonScores="Output/TC1500264_ExonScores.txt",ArrayScores=
+#' "Output/TC1500264_ArrayScores.txt",Exonthreshold=0.5,Groups=list(c(1:3),c(4:6)),paired=FALSE,
+#' significancelevel=0.05)
+#' 
+#' ASPSR_PSR=TC1500264_1vs2[which(round(TC1500264_1vs2$ExonScore,2)>=0.50&
+#' TC1500264_1vs2$adj.p.value<0.05),2]
+#' 
+#' REIDS_JunctionAssesment(Indices="Output/TC1500264_LineIndex.csv",DataFile=
+#' "Output/TC1500264_Pivot.csv",ASProbeSets=ASPSR_PSR,Juninfo="User",JAnnotI=NULL,
+#' JAnnot=NULL,EandTrAnnotI="Output/REMAP_Indices.txt",EandTrAnnot=
+#' "Output/HJAY_REMAP.txt",positionData=NULL,transcriptData=NULL,Groups=
+#' list(c(1:3),c(4:6)),Low_AllSamples=c(),Low_GSamples=c(),Location="Output",
+#' Name="TC1500264")
+#' }
+REIDS_JunctionAssesment<-function(Indices,DataFile,ASProbeSets=c(),Juninfo="User",JAnnotI=NULL,JAnnot=NULL,EandTrAnnotI=NULL,EandTrAnnot=NULL,PartiallyAnnotated=FALSE,positionData=NULL,transcriptData=NULL,Groups=list(c(3,4,5),c(6,7,8)),Low_AllSamples=c(),Low_GSamples=c(),Location=NULL,Name="REIDS_Jun"){
+	Lines=utils::read.table(Indices,header=TRUE,sep=",",stringsAsFactors=FALSE)
+	Lines=data.frame(Lines)	
+	Lines[,1]=as.numeric(Lines[,1])
+	Lines[,2]=as.numeric(Lines[,2])
 	
-	Genes=unique(Data$GeneID)
-	writeLines(c("TC_ID\tPSR_ID\tType\tUnreliable Junctions\tLinking Junctions\tExclusion Junctions\tSupported by\tIdentified by\tFold Change\tExons"),paste(Name,".txt",sep=""),sep="\n")
-	ScoresOutput=lapply(Genes, function(x) JunInfo(x,ASPSR=ASProbeSets,JLines=JAnnotI[which(JAnnotI[,1]==x),],TrLines=TrAnnotI[which(TrAnnotI[,1]==x),],ELines=EAnnotI[which(EAnnotI[,1]==x),],DataS=Data[which(as.character(Data[,1])==x),],Groups=Groups,Low_AllSamples,Low_GSamples,Plot=FALSE,Name))
+	if(!is.null(Location)){
+		Files=list.files(path=Location,pattern=paste("^",Name,sep=""))	
+		if(!paste(Name,"_ASInfo.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","PSR_ID","Type","Unreliable Junctions","Linking Junctions","Exclusion Junctions","Supported by","Identified by","Fold Change","Exons")), file = paste(Location,"/",Name,"_ASInfo.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_Compositions.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","TranscriptName","Junctions","ProbeSets")), file = paste(Location,"/",Name,"_Compositions.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_GroupTranscripts.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","TranscriptName",paste("Present in Group",c(1:length(Groups))))), file = paste(Location,"/",Name,"_GroupTranscripts.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+	}
+	ScoresOutput=apply(Lines,1, function(x) JunInfo(file_name=DataFile,file_pos=x[1],line_length=x[2],ASPSR=ASProbeSets,Juninfo,JAnnotI,JAnnot,EandTrAnnotI,EandTrAnnot,PartiallyAnnotated,positionData,transcriptData,Groups=Groups,Low_AllSamples,Low_GSamples,Plot=FALSE,Location,Name))
 }
+
+#' REIDS_IsoformAssesment
+#' 
+#' The REIDS_IsoformAssesment is an experimental function to analyze the isoform information based on the exon level values and the isoform composition.
+#' @export
+#' @param geneIDs A vector with the geneIDs to analyze.
+#' @param IsoformInfo The path to the Composition file created by REIDS_JunctionAssesment or CreateOutput.
+#' @param ExonLevel The path to the ExonLevel.txt file
+#' @param Groups A list with  elements speficifing the columns of the data in each group.
+#' @param paired Logical. Are the groups paired samples?
+#' @param Location A character string indication the place where the outputs are saved.
+#' @param Name A character string with the name of the ouput file. Defaults to "REIDSIsoforms".
+#' @return The function returns three files. The first file has name "Name_IsoformIndication.txt" and contains an assesment of the relative expression levels of the isoforms. A second file,"Name_ExonTesting.txt", shows information regarding the differential expression of exon. A final file,"Name_PossibelDEIsoforms" lists isoforms which might be differentially expressed between the groups.
+REIDS_IsoformAssesment<-function(geneIDs,IsoformInfo,ExonLevel,Groups,paired,Location=NULL,Name="REIDSIsoforms"){
+	
+	Info=utils::read.table(IsoformInfo,sep="\t",header=TRUE,stringsAsFactors=FALSE)
+	
+	ExonLevel=utils::read.table(ExonLevel,sep="\t",header=TRUE,stringsAsFactors=FALSE,colClasses=c("character","character",rep("numeric",length(unlist(Groups)))))
+	
+	if(!is.null(Location)){
+		Files=list.files(path=Location,pattern=paste("^",Name,sep=""))	
+		if(!paste(Name,"_IsoformIndication.txt",sep="")%in%Files){
+			mainname=c()
+			for(g in 1:length(Groups)){
+				mainname=c(paste("Probe Set Group ",g,sep=""),paste("Expression Group ",g,sep=""),mainname)
+			}
+			utils::write.table(t(c("TC_ID","Transcript",mainname)), file = paste(Location,"/",Name,"_IsoformIndication.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_ExonTesting.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","Probe Set","Statistic","PValue","Adj.PValue")), file = paste(Location,"/",Name,"_ExonTesting.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+		if(!paste(Name,"_PossibleDEIsoforms.txt",sep="")%in%Files){
+			utils::write.table(t(c("TC_ID","Percentage Isoforms DE","Isoforms")), file = paste(Location,"/",Name,"_PossibleDEIsoforms.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+		}
+	}
+	Isoformanalysis<-function(geneID,IsoformI,ExonData,groups,paired,Location){
+		output=list()
+		Comp=matrix(0,nrow=nrow(ExonData),ncol=nrow(IsoformI)/2)
+		rownames(Comp)=unique(ExonData[,2])
+		SQ=seq(1,nrow(IsoformI),2)
+		colnames(Comp)=IsoformI[SQ,2]
+		for(tr in 1:length(SQ)){
+			S=strsplit(IsoformI[SQ[tr],4],"[|]")
+			Comp[which(rownames(Comp)%in%S[[1]]),tr]=1
+			S=strsplit(IsoformI[SQ[tr],3],"[|]")
+			Comp[which(rownames(Comp)%in%S[[1]]),tr]=1
+		}
+		if(any(colSums(Comp)==0)){
+			Comp=Comp[,-c(which(colSums(Comp)==0))]
+		}
+		
+		if(length(unique(ExonData[,2]))==1){
+			Comp=t(as.matrix(Comp))
+			rownames(Comp)=unique(ExonData[,2])
+		}
+		if(ncol(Comp)==1){
+			Set=which(Comp[,1]==0)
+			if(length(Set)>0){
+				if(any(rownames(ExonData)%in%names(Set))){
+					V=ExonData[-c(which(rownames(ExonData)%in%names(Set))),,drop=FALSE]
+				}	
+				else{
+					V=ExonData
+				}
+				Comp=Comp[-c(which(Comp[,1]==0)),,drop=FALSE]
+			}
+			else{
+				V=ExonData
+			}		
+		}
+		else{
+			if(any(rowSums(Comp)==0)){
+				Set=which(rowSums(Comp)==0)
+				if(any(ExonData[,2]%in%names(Set))){
+					V=ExonData[-c(which(ExonData[,2]%in%names(Set))),,drop=FALSE]
+				}
+				else{
+					V=ExonData
+				}
+				Comp=Comp[-c(which(rowSums(Comp)==0)),,drop=FALSE]				
+			}
+			else{
+				V=ExonData
+			}
+		}
+
+		#unique probe sets
+		if(ncol(Comp)==1){
+			UPandJ=rownames(Comp)[which(Comp[,1]==1)]
+			UP=UPandJ[which(substr(UPandJ,1,1)=="P")]
+		}
+		else{
+			UPandJ=which(rowSums(Comp)==1)
+			UP=names(UPandJ)[which(substr(names(UPandJ),1,1)=="P")]
+		}
+		
+		
+		Isoform=c()
+		if(length(UP)>0){
+			Trs=colnames(Comp)[sapply(UP,function(x) which(Comp[x,]==1))]
+			IsLevel=c()
+			for(g in 1:length(groups)){
+				ILevel=sapply(UP,function(x) round(mean(as.vector(as.matrix(V[which(V[,2]==x),groups[[g]]+2]))),2))
+				IsLevel=cbind(IsLevel,UP,ILevel)
+			}
+			Isoform=cbind(Trs,IsLevel)
+			T=c()
+			for(t in unique(Trs)){
+				temp=c()
+				for(g in 1:length(Groups)){
+					temp=c(temp,paste(Isoform[which(Isoform[,1]==t),2],collapse="|"),mean(as.numeric(Isoform[which(Isoform[,1]==t),2*g+1])))
+				}
+				T=rbind(T,c(t,temp))
+			}
+			Isoform=T
+		}
+		else{
+			Trs=c()
+		}
+		
+		#tr lowest levels
+		IsLevel=c()
+		TrOthers=colnames(Comp)[which(!colnames(Comp)%in%Trs)]
+		if(length(TrOthers)>0){	
+			for(f in 1:length(TrOthers)){
+				T=c()		
+				JandPSR_Present=rownames(Comp)[which(Comp[,TrOthers[f]]==1)]
+				PSR_Present=JandPSR_Present[which(substr(JandPSR_Present,1,1)=="P")]
+				for(p in PSR_Present){
+					M=c()
+					for(g in 1:length(groups)){
+						S=V[which(V[,2]==p),c(groups[[g]]+2)]
+						M=c(M,p,round(mean(as.vector(as.matrix(S))),2))
+					}	
+					T=rbind(T,M)
+					
+				}
+				
+				T=as.matrix(T)
+				rownames(T)=c(1:nrow(T))
+				T=data.frame(T,stringsAsFactors=FALSE)
+				T[,2]=as.numeric(T[,2])
+				T[,4]=as.numeric(T[,4])
+				
+				R=c()
+				for(g in 1:length(groups)){
+					Select=which.min(T[,2*g])
+					R=c(R,T[Select,2*g-1],T[Select,2*g])
+				}
+				IsLevel=rbind(IsLevel,c(TrOthers[f],R))
+			}
+			
+			IsoformIndicationLevels=rbind(Isoform,IsLevel)
+			
+		}
+		
+		IsoformIndicationLevels=rbind(Isoform,IsLevel)
+		if(class(IsoformIndicationLevels)!="matrix"){
+			IsoformIndicationLevels=matrix(IsoformIndicationLevels,nrow=1)
+		}
+		rownames(IsoformIndicationLevels)=c(1:nrow(IsoformIndicationLevels))
+		IsoformIndicationLevels=data.frame(IsoformIndicationLevels,stringsAsFactors=FALSE)
+		for(g in 1:length(groups)){
+			IsoformIndicationLevels[,2*g+1]=as.numeric(IsoformIndicationLevels[,2*g+1])
+			IsoformIndicationLevels[,2*g+1]=as.numeric(IsoformIndicationLevels[,2*g+1])
+		}
+		colnames(IsoformIndicationLevels)=c("Transcript",paste(rep(c("Lowest Expr Probe Set","Group"),length(groups)),sort(rep(c(1:length(groups)),length(groups)))))
+		IsoformIndicationLevels=cbind("GeneID"=geneID,IsoformIndicationLevels)
+		#Indication not estimate
+		
+		ttest<-function(x,y,pairs){	
+			out1=stats::t.test(x,y,paired=pairs)
+			out2=cbind(out1$statistic,out1$p.value)
+			return(out2)	
+		}
+		
+		el=1
+		output[[el]]=IsoformIndicationLevels
+		names(output)[el]="IsoformIndication"
+		el=el+1
+		
+		# DE assesment
+		IsoformDETest=matrix(0,nrow=nrow(V),ncol=3)
+		colnames(IsoformDETest)=c("statistic","p-value","adj.p-value")
+		
+		anovaFtest1<-function(data,Groups){
+			fit<-stats::aov(as.vector(data)~Groups)
+			out1=cbind(summary(fit)[[1]][1,4],summary(fit)[[1]][1,5])	
+			return(out1)
+			
+		}
+		
+		if(length(groups)<=2){
+			IsoformDETest[,c(1,2)] = t(sapply(as.vector(V[,2]),function(i) {ttest(x=V[which(V[,2]==i),groups[[1]]+2],y=V[which(V[,2]==i),groups[[2]]+2], pairs = paired)}))	
+		}
+		else{
+			Groups=rep(0,length(unlist(groups)))
+			for(j in 1:length(groups)){
+				positions=groups[[j]]
+				Groups[positions]=names(groups)[j]
+			}
+			Groups=as.numeric(Groups)
+			Groups=factor(Groups)
+			
+			IsoformDETest[,c(1,2)]  = t(sapply(as.vector(V[,2]),function(i) {anovaFtest1(data=V[which(V[,2]==i),,drop=FALSE],Groups=Groups)}))				
+		}
+		
+		p_vals=as.vector(as.matrix((IsoformDETest[,grep("^(p-value)",colnames(IsoformDETest))])))
+		adj_p_vals=stats::p.adjust(p_vals,"BH")
+		IsoformDETest[,3]=adj_p_vals
+		
+		IsoformDETest=as.data.frame(IsoformDETest)
+		IsoformDE=cbind(geneID,V[,2],IsoformDETest)
+		
+		PossibleDETr=c()
+		for(r in 1:nrow(IsoformDE)){
+			if(IsoformDE[r,4]>=0.01){
+				next
+			}
+			else{
+				p=as.character(IsoformDE[r,2])
+				PossibleDETr=c(PossibleDETr,unique(names(which(Comp[p,]==1))))
+			}
+		}
+		PossibleDETr=unique(PossibleDETr)
+		Percentage=length(PossibleDETr)/ncol(Comp)
+		
+		
+		output[[el]]=IsoformDE
+		names(output)[el]="ExonTesting"
+		output[[el+1]]=c(geneID,Percentage,paste(PossibleDETr,collapse="|"))
+		names(output)[el+1]="Possible DE Isoforms"
+		
+		
+		if(!is.null(Location)){
+			#save(output, file=paste(Location,"/REIDS_IsoformAssesment_", geneID, ".RData", sep=""))
+			if(!is.null(output[[1]])){
+				utils::write.table(output[[1]],file = paste(Location,"/",Name,"_IsoformIndication.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+			}
+			if(!is.null(output[[2]])){
+				utils::write.table(output[[2]],file = paste(Location,"/",Name,"_ExonTesting.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)
+				
+			}
+			if(!is.null(output[[3]])){
+				utils::write.table(t(output[[3]]),file = paste(Location,"/",Name,"_PossibleDEIsoforms.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)				
+			}
+			
+		}
+		else{
+			return(output)
+		}
+	
+	}
+	
+	G=unique(Info[,1])
+	
+	invisible(lapply(G,function(x) Isoformanalysis(geneID=x,IsoformI=Info[which(Info[,1]==x),],ExonData=ExonLevel[which(ExonLevel[,1]==x),],groups=Groups,paired=paired,Location=Location)))
+
+}
+
+
+#' REIDS_Analysis
+#' 
+#' The REIDS_Analysis is a wrapper function for the REIDSFunction, the ASExon function, the REIDS_JunctionAssesment function and the REIDS_IsoformAssesment function.
+#' @export
+#' @param geneIDs A vector with the geneIDs to analyze.
+#' @param Indices The .csv file created by Line_Indexer.py which contains indices for every gene.
+#' @param DataFile The .csv file created by PivotTransformation. 
+#' @param nsim The number of iterations to perform. Defaults to 1000.
+#' @param informativeCalls Logical. Should the I/NI calls method be perform before applying the REIDS model?
+#' @param Summarize A character vector specifying the wich summarization method to be performed. The choices are using "EqualAll", "WeightedAll", "EqualConst", "WeightedConst". The former two use all probe sets while the latter to use only the consituitive probe sets. Summarization on the consistuitive probe sets will only be performed if ASPSR is specified.
+#' @param rho The threshold for filtering in the I/NI calls method. Probesets with scores higher than rho are kept.
+#' @param Exonthreshold The exon score threshold to be maintained. If not NULL, probesets with an exon score lower than this value are not considered further and the p-values will be adjusted for multiplicity after testing. If NULL, all probesets are considered and a multiplicity correction is not performed.
+#' @param Groups A list with elements specifying the columns of the data in each group.
+#' @param paired Logical. Are the groups paired? If TRUE the mean paired differences are calculated and tested whether these are significantly different from zero or not.
+#' @param significancelevel The significance level to be maintained on the p-values. The filtering on the significance is conducted only if an Exonthreshold is specified and the p-value are adjusted for multiplicity.
+#' @param Low_AllSamples A character vector containing the probe sets which are not DABG in all samples.
+#' @param Low_GSamples A list with a  character vector per group containing the probe sets which are not DABG in that group.
+#' @param Juninfo A parameter specifying wether the annotations are user of Ensembl defined. If JunInfo is "User" (default) the annotations provided in EandTrAnnot are used. If JunInfo is "Ensembl" the annotations in EandTrAnnot are used to set up tje junction associations but the gene name and position in transcriptData and positionData are used to connect with the Ensembl data base and retrieve corresponding information. 
+#' @param JAnnotI The file name with line indices for the junction associations.
+#' @param JAnnot The file name with the junction associations.
+#' @param EandTrAnnotI The file name with line indices for the exon and isoform annotations.
+#' @param EandTrAnnot The file name with the exon and isoform annotations.
+#' @param PartiallyAnnotated Logical. Should the exon annotations with partially annotated probe sets still be included? If FALSE, these are excluded. If TRUE, these are included. Default is FALSE.
+#' @param positionData The file with the chromosome start and ends for the probe sets. Only needed in JunInfo=Ensembl.
+#' @param transcriptData The file with gene name of the transcripts. Only needed in JunInfo=Ensembl.
+#' @param Location A character string indication the place where the outputs are saved. Defaults to Output.
+#' @param Name A character string with the name of the ouput file. Defaults to "REIDSAnalysis".
+#' @return The output will be written to each of the corresponding .txt files of the called upon functions.
+#' @examples
+#' \dontrun{
+#' data(TC1500264)
+#' PivotTransformData(Data=TC1500264,GeneID=NULL,ExonID=NULL,
+#' REMAPSplitFile="TC1500264_Gene_SplitFile.txt",Location="Output/",Name="TC1500264_Pivot")
+#'
+#' REIDS_Analysis(Indices="Output/TC1500264_LineIndex.csv",DataFile="Output/TC1500264_Pivot.csv",
+#' nsim=100,informativeCalls=FALSE,Summarize=c("WeightedAll","EqualAll","WeightedConst","EqualConst"),
+#' rho=0.5,Exonthreshold=0.5,significancelevel=0.05,Groups=Groups,paired=FALSE,Low_AllSamples=c()
+#' ,Low_GSamples=c(),Juninfo="User",JAnnotI=NULL,JAnnot=NULL,EandTrAnnotI="Output/REMAP_Indices.txt",
+#' EandTrAnnot="Output/HJAY_REMAP.txt",positionData=NULL,transcriptData=NULL,
+#' Location="OutputREIDSAnalysis",Name="TC1500264")
+#' }
+REIDS_Analysis<-function(geneIDs,Indices,DataFile,nsim=5000,informativeCalls=FALSE,Summarize=TRUE,rho=0.5,Exonthreshold=0.5,significancelevel=0.05,Groups,paired=FALSE,Low_AllSamples=c(),Low_GSamples=c(),
+		Juninfo="User",JAnnotI=NULL,JAnnot=NULL,EandTrAnnotI=NULL,EandTrAnnot=NULL,PartiallyAnnotated=FALSE,positionData=NULL,transcriptData=NULL,Location="Output",Name="REIDSAnalysis"){
+	
+	#1) Perform the REIDS function
+	print("Performing the REIDS function")
+	REIDSFunction(ASPSR=c(),Indices,DataFile,nsim,informativeCalls,Summarize=Summarize[which(Summarize%in%c("WeightedAll","EqualAll"))],rho,Low_AllSamples,Groups,Location,Name)
+
+	#2) AS Identification
+	print("Performing the AS identification")
+	ExonS=paste(Location,"/",Name, "_ExonScores.txt", sep="")
+	ArrayS=paste(Location,"/",Name, "_ArrayScores.txt", sep="")
+	ASTest=ASExons(ExonS,ArrayS,Exonthreshold=0,Groups,paired,significancelevel=NULL,Location=NULL)
+
+	utils::write.table(t(c("TC_ID","PSR_ID","ExonScore","Statistic","Pvalue","Adj.PValue")), file = paste(Location,"/",Name,"_ASTesting.txt",sep=""), sep = "\t", col.names = FALSE, row.names=FALSE,append = TRUE,quote=FALSE)		
+	utils::write.table(ASTest,file=paste(Location,"/",Name, "_ASTesting.txt", sep=""), sep = "\t", row.names=FALSE,col.names=FALSE,quote=FALSE,append=TRUE)
+	ASPSR=unique(ASTest[which(round(ASTest[,3],2)>Exonthreshold&round(ASTest$adj.p.value,2)<significancelevel),2])
+	
+	print(paste(length(ASPSR)," found as AS probe sets",sep=""))
+	
+	#3) Summarize on Const probe sets
+	if(any(Summarize%in%c("WeightedConst","EqualConst"))){
+		print("Performing summarization on the constituitive probe sets")
+		REIDSFunction(ASPSR,Indices,DataFile,nsim,informativeCalls,Summarize=Summarize[which(Summarize%in%c("WeightedConst","EqualConst"))],rho,Low_AllSamples,Groups,Location,Name)
+	}
+	#3) Junction information (if available)
+	if(!is.null(EandTrAnnotI)){
+		print("Performing junction and isoform assessment")
+		REIDS_JunctionAssesment(Indices,DataFile,ASProbeSets=ASPSR,Juninfo,JAnnotI,JAnnot,EandTrAnnotI,EandTrAnnot,PartiallyAnnotated,positionData,transcriptData,Groups,Low_AllSamples,Low_GSamples,Location,Name)
+		ExonD=paste(Location,"/",Name, "_ExonLevel.txt", sep="")
+		IsinfoName=paste(Location,"/",Name,"_Compositions.txt",sep="")
+		
+		REIDS_IsoformAssesment(geneIDs,IsoformInfo=IsinfoName,ExonLevel=ExonD,Groups,paired,Location,Name)
+	}	
+}
+
 
 ## FIRMA Model Analysis
 
@@ -2606,7 +5169,7 @@ FIRMAScores <- function(Data,InformativeExons=NULL,groups=list(group1=list(group
 #' data(TC12000010_GeneLevel)
 #' ExpressionLevelPlot(GeneID="TC12000010",ExonID="PSR12000150",
 #' Data=TC12000010,GeneLevelData=TC12000010_GeneLevel,ExonLevelData
-#' =TC12000010_ExonLevel,Groups=list(c(10:18),c(19:27)),ylabel="",
+#' =TC12000010_ExonLevel,Groups=list(c(1:9),c(10:18)),ylabel="",
 #' title="PSR12000150")
 #' }
 
@@ -2617,22 +5180,27 @@ ExpressionLevelPlot<-function(GeneID=NULL,ExonID=NULL,Data,GeneLevelData=NULL,Ex
 		stop("no GeneID and/or ExonID specified")
 	}
 	
+	groups=list()
+	l=0
+	for(g in 1:length(Groups)){
+		groups[[g]]=l+seq_along(Groups[[g]])
+		l=l+length((Groups[[g]]))
+	}
 	
-	Exon_ExonID=ExonLevelData[which(ExonLevelData$ExonID==ExonID),]
+	Exon_ExonID=ExonLevelData[which(ExonLevelData[,2]==ExonID),]
 	Exon_ExonID=Exon_ExonID[,-c(1,2)]
 	#Exon_ExonID=log2(Exon_ExonID)
 	Exon_ExonID=Exon_ExonID[,unlist(Groups)]
 	
 	
 	# Gene Level Data
-	Gene_GeneID=GeneLevelData[which(GeneLevelData$GeneID==GeneID),]
+	Gene_GeneID=GeneLevelData[which(GeneLevelData[,1]==GeneID),]
 	#Gene_GeneID[,-c(1)]=log2(Gene_GeneID[,-c(1)])
 	Gene_GeneID=Gene_GeneID[,-c(1)]
 	Gene_GeneID=Gene_GeneID[,unlist(Groups)]
-	
 
-	# Observed Probe intensities
-	ProbeIntensities=Data[which(Data$ExonID==ExonID),]
+	
+	ProbeIntensities=Data[which(Data[,2]==ExonID),]
 	ProbeIntensities_ExonID=ProbeIntensities[,-c(1,2)]
 	ProbeIntensities_ExonID=ProbeIntensities_ExonID[,unlist(Groups)]
 	
@@ -2647,15 +5215,21 @@ ExpressionLevelPlot<-function(GeneID=NULL,ExonID=NULL,Data,GeneLevelData=NULL,Ex
 		ylabel=paste("Transcript",GeneID," - PSR",ExonID,sep=" ")
 	}
 	
-	graphics::plot(0,0,typ="n",xlab="",ylab=ylabel,ylim=c(0,max_ylim+2),xlim=c(1,ncol(ProbeIntensities_ExonID)),xaxt="n",frame=TRUE,,cex.axis=1.5)
-	graphics::lines(x=c(1:ncol(ProbeIntensities_ExonID)),y=Gene_GeneID) #Gene level data...
-	graphics::lines(x=c(1:ncol(ProbeIntensities_ExonID)),y=Exon_ExonID,col="blue") #Exon Level data
-	for(i in 1:nrow(ProbeIntensities_ExonID)){
-		graphics::points(x=c(1:ncol(ProbeIntensities_ExonID)),y=as.matrix(ProbeIntensities_ExonID[i,]),pch=19,col="blue")
+	gg=groups
+	graphics::plot(0,0,typ="n",xlab="",ylab=ylabel,ylim=c(0,max_ylim+2),xlim=c(1,ncol(ProbeIntensities_ExonID)),xaxt="n",frame=TRUE,,cex.axis=2,cex.lab=2)
+	for(g in 1:length(Groups)){
+		graphics::lines(x=gg[[g]],y=Gene_GeneID[gg[[g]]],col="black",lwd=2) #Exon Level data
 	}
-	graphics::axis(1,labels=colnames(Gene_GeneID),at=c(1:ncol(ProbeIntensities_ExonID)),las=2,cex.axis=1.5)	
+	if(length(ExonLevelData)>0){
+		for(g in 1:length(Groups)){
+			graphics::lines(x=gg[[g]],y=Exon_ExonID[gg[[g]]],col="#f0d130",lwd=2) #Exon Level data
+		}	
+	}
+	for(i in 1:nrow(ProbeIntensities_ExonID)){
+		graphics::points(x=c(1:ncol(ProbeIntensities_ExonID)),y=as.matrix(ProbeIntensities_ExonID[i,]),pch=19,col="#f0d130")
+	}
+	graphics::axis(1,labels=colnames(Gene_GeneID),at=c(1:ncol(ProbeIntensities_ExonID)),las=2,cex.axis=2)	
 	title(main = title,cex.main=2)
-
 	
 }
 
@@ -2685,10 +5259,14 @@ AnnotateGenes <- function(transcript.IDs,trinfo){
 							assignment <- unique(trim(assignment[HGNC]))
 							#assignment <- paste(assignment, collapse = "/")
 						} else{
-							assignment <- "--"} 
+							assignment <- "---"} 
 					}))
-	gene.symbols[is.na(gene.symbols)]	<- "--"
-	annotate      <- data.frame(transcript = transcripts, symbol = gene.symbols)
+	if(length(gene.symbols)>0){
+		gene.symbols[is.na(gene.symbols)]	<- "---"
+		annotate      <- data.frame(transcript = transcripts, symbol = gene.symbols)
+	}else{
+		annotate=data.frame(transcript = transcripts, symbol = "---")
+	}	
 	annotate
 }
 
@@ -2835,14 +5413,18 @@ TranscriptsPlot <- function(trans, positions, transcriptinfo, display.probesets 
 
 		
 		if(!is.null(Highlight)){
-			gene.pos<-gene.positions[gene.positions[,1]==paste(Highlight),]
-			print(paste("Highlighted Region: ",paste(gene.pos,collapse=" ")))
-			rOverlay <- makeRectangleOverlay(start = (as.numeric(gene.pos$start)-500), end = (as.numeric(gene.pos$stop)+500),region=c(2,3),dp = DisplayPars(alpha = .5, fill = "pink"))
+			R=list()
+			for(p in 1:length(Highlight)){
+				gene.pos<-gene.positions[gene.positions[,1]==Highlight[p],]
+				print(paste("Highlighted Region: ",paste(gene.pos,collapse=" ")))
+				rOverlay <- makeRectangleOverlay(start = (as.numeric(gene.pos$start)-500), end = (as.numeric(gene.pos$stop)+500),region=c(2,3),dp = DisplayPars(alpha = .5, fill = "pink"))
+				R[[p]]=rOverlay
+			}
 			if(is.null(Start)&is.null(Stop)){
-				gdPlot(list(exon,gene,transcript),overlays = rOverlay)
+				gdPlot(list(exon,gene,transcript),overlays = R)
 			}
 			else{
-				gdPlot(list(exon,gene,transcript),Start,Stop,overlays = rOverlay)
+				gdPlot(list(exon,gene,transcript),Start,Stop,overlays = R)
 			}
 		}
 		else{
